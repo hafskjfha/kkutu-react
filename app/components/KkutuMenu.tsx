@@ -8,7 +8,7 @@ const KkutuMenu = () => {
         // No toggle functionality
     };
 
-    const buttonBaseClasses = "border-none rounded-t-lg h-8 transition-all duration-200 hover:scale-115 hover:shadow-lg shadow-md px-6 mt-5 origin-bottom";
+    const buttonBaseClasses = "border-none rounded-t-lg h-8 transition-all duration-200 hover:scale-115 hover:shadow-lg shadow-md px-6 mt-5 origin-bottom text-gray-800 border-gray-800";
     const tinyMenuClasses = "!px-2";
 
     return (
