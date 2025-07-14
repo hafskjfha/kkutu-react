@@ -1,5 +1,7 @@
 import React from 'react';
 import HistoryHolder from './HistoryHolder';
+import GameInput from './GameInput';
+
 
 interface GraphBarProps {
   className: string;
@@ -26,6 +28,7 @@ const GraphBar = ({ className, min = 0, val = 0, max = 100, bgc }: GraphBarProps
 };
 
 const GameHead: React.FC = () => {
+  const [inputValue, setInputValue] = React.useState('');
   return (
     <>
       <div className="game-head flex items-start">
@@ -133,6 +136,19 @@ const GameHead: React.FC = () => {
       {/* History Holder - Items 섹션과 같은 위치에서 시작 */}
       <div className="ml-[105px]">
         <HistoryHolder />
+      </div>
+      <div className='ml-[270px]'>
+          <GameInput 
+            placeholder="당신의 차례! 아래의 채팅 창에서 입력하세요."
+            readonly={false}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                // 채팅 전송 로직
+              }
+            }}
+          />
       </div>
     </>
   );
