@@ -7,15 +7,21 @@ interface GameInputProps {
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   className?: string;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
 }
 
+/**
+ * 게임 입력창 컴포넌트
+ * 사용자가 단어를 입력하는 필드입니다.
+ */
 const GameInput: React.FC<GameInputProps> = ({
   placeholder = "Your turn - Input chat",
   readonly = false,
   value,
   onChange,
   onKeyDown,
-  className = ""
+  className = "",
+  inputRef
 }) => {
   return (
     <div className={`
@@ -37,6 +43,7 @@ const GameInput: React.FC<GameInputProps> = ({
         value={value}
         onChange={onChange}
         onKeyDown={onKeyDown}
+        ref={inputRef}
         className="
           w-[420px] 
           h-[40px] 

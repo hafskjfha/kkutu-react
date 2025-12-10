@@ -1,18 +1,32 @@
 "use client";
-import KkutuChat from "../components/KkutuChat";
-import KkutuMenu from "../components/KkutuMenu";
+import { useEffect } from "react";
+import KkutuChat from "./KkutuChat";
+import KkutuMenu from "./components/KkutuMenu";
 import GameBox from "./GameBox";
 import GameHead from "./GameHead";
+import { ChatProvider } from "./hooks/useChat";
+import { soundManager } from "./lib/sound";
 
+/**
+ * 게임 전체를 감싸는 최상위 컴포넌트
+ * 사운드 로드 및 주요 컴포넌트 배치를 담당합니다.
+ */
 const Game = () => {
+    // 컴포넌트 마운트 시 사운드 리소스 로드
+    useEffect(() => {
+        soundManager.load();
+    }, []);
+
     return (
-        <div>
-            <KkutuMenu />
-            <GameBox>
-                <GameHead />
-            </GameBox>
-            <KkutuChat />
-        </div>
+        <ChatProvider>
+            <div>
+                <KkutuMenu />
+                <GameBox>
+                    <GameHead />
+                </GameBox>
+                <KkutuChat />
+            </div>
+        </ChatProvider>
     );
 };
 

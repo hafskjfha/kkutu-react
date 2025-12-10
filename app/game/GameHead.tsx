@@ -1,48 +1,107 @@
 import React from 'react';
 import HistoryHolder from './HistoryHolder';
 import GameInput from './GameInput';
+import { useChat } from './hooks/useChat';
+import { useGameLogic } from './hooks/useGameLogic';
+import GraphBar from './components/GraphBar';
+import { useEffect } from 'react';
 
-
-interface GraphBarProps {
-  className: string;
-  min?: number;
-  val?: number;
-  max?: number;
-  bgc?: string;
-}
-
-const GraphBar = ({ className, min = 0, val = 0, max = 100, bgc }: GraphBarProps) => {
-  const percentage = ((val - min) / (max - min)) * 100;
-  
-  return (
-    <div className={`shadow-none ${className}`} style={{ textShadow: '0px 1px 3px #141414' }}>
-      <div 
-        className="graph-bar"
-        style={{ 
-          width: `${percentage}%`,
-          backgroundColor: bgc || undefined
-        }}
-      />
-    </div>
-  );
-};
-
+/**
+ * 게임의 메인 화면 컴포넌트
+ * 게임 진행 상황, 캐릭터, 타이머 등을 표시합니다.
+ */
 const GameHead: React.FC = () => {
-  const [inputValue, setInputValue] = React.useState('');
+  const { chatInput, handleChatInputChange } = useChat();
+  const {
+    word,
+    isFail,
+    chainCount,
+    turnTime,
+    roundTime,
+    missionChar,
+    historyItems,
+    inputVisible,
+    turnInstant,
+    animatingWord,
+    visibleChars,
+    pulseOn,
+    inputRef,
+    handleInput,
+    TURN_TIME_LIMIT,
+    ROUND_TIME_LIMIT
+  } = useGameLogic();
+
+  // Register the game's input handler and visibility into chat context so
+  // the chat input can forward Enter presses to the game input when visible.
+  const { registerGameHandleInput, setGameInputVisible } = useChat();
+
+  useEffect(() => {
+    registerGameHandleInput(handleInput);
+    return () => {
+      registerGameHandleInput(null);
+    };
+  }, [handleInput, registerGameHandleInput]);
+
+  useEffect(() => {
+    setGameInputVisible(inputVisible);
+    return () => setGameInputVisible(false);
+  }, [inputVisible, setGameInputVisible]);
+
+  // 미션 글자가 포함된 단어 렌더링 (연두색 하이라이트)
+  const renderWordWithMission = (text: string, showHighlight: boolean) => {
+    if (animatingWord && text === animatingWord) {
+      const wordLength = text.length;
+      const isLongWord = wordLength >= 9;
+      
+      return (
+        <span>
+          {text.split('').map((char, idx) => {
+            const isVisible = visibleChars[idx];
+            const isMissionChar = showHighlight && char === missionChar;
+            
+            if (isLongWord && !isVisible) {
+              return null;
+            }
+            
+            return (
+              <span
+                  key={idx}
+                  style={{
+                    display: 'inline-block',
+                    verticalAlign: 'middle',
+                    lineHeight: '20px',
+                    fontSize: isVisible && pulseOn ? '23px' : '20px',
+                    transform: isVisible ? 'translateY(0) scale(1)' : 'translateY(-6px) scale(1.2)',
+                    transition: 'transform 120ms ease-out, opacity 120ms ease-out',
+                    color: isMissionChar ? '#90EE90' : undefined,
+                    opacity: isVisible ? 1 : 0,
+                  }}
+                >
+                  {char}
+                </span>
+            );
+          })}
+        </span>
+      );
+    }
+    
+    return text;
+  };
+
   return (
     <>
       <div className="game-head flex items-start">
-        {/* Items Section */}
+        {/* 미션 글자 섹션 (왼손) */}
         <div 
           className="items pt-[50px] mt-[50px] mx-[40px] ml-[105px] w-[100px] h-[110px] text-[24px] text-[#EEEEEE] font-bold text-center bg-[url('/img/lefthand.png')] bg-no-repeat"
           style={{ textShadow: '0px 1px 5px #141414' }}
         >
-          가
+          {missionChar}
         </div>
 
-        {/* Jjoriping Section */}
+        {/* 쪼리핑 캐릭터 및 디스플레이 섹션 */}
         <div className="jjoriping w-[500px]">
-          {/* Jjo Objects */}
+          {/* 캐릭터 얼굴 */}
           <div className="relative">
             <img 
               className="absolute top-[11px] left-[32px]" 
@@ -61,94 +120,64 @@ const GameHead: React.FC = () => {
             />
           </div>
 
-          {/* Display Bar */}
+          {/* 게임 정보 디스플레이 */}
           <div className="p-[20px_5px_5px_5px] border-2 border-black rounded-bl-[10px] rounded-br-[10px] mt-[40px] w-[486px] h-[120px] bg-[#DEAF56] ml-8">
-            {/* Main Display */}
-            <div className="p-[8px_5px] rounded-[10px] rounded-bl-none rounded-br-none w-[474px] h-[40px] text-[20px] text-center text-[#EEEEEE] bg-black/70 whitespace-nowrap overflow-hidden text-ellipsis">
-              테스트
+            {/* 단어 표시 영역 */}
+            <div className={`p-[8px_5px] rounded-[10px] rounded-bl-none rounded-br-none w-[474px] h-[40px] text-[20px] text-center text-[#EEEEEE] bg-black/70 whitespace-nowrap overflow-hidden text-ellipsis ${isFail ? 'text-[#FF7777] line-through' : ''}`}>
+              {renderWordWithMission(word, !isFail)}
             </div>
 
-            {/* Graph Bars */}
-            <div className="border-l border-r border-black/70 w-[474px] h-[20px] text-white text-right overflow-hidden bg-[#70712D]">
-              <div className="pt-[4px] h-[20px] text-[11px] whitespace-nowrap overflow-hidden bg-[#E6E846]" style={{ width: '30%' }}>
-                7.2초
-              </div>
-            </div>
+            {/* 턴 시간 그래프 */}
+            <GraphBar
+              className="border-l border-r border-black/70 w-[474px] h-[20px] bg-[#70712D]"
+              min={0}
+              val={turnTime}
+              max={TURN_TIME_LIMIT}
+              bgc="#E6E846"
+              label={`${turnTime.toFixed(1)}초`}
+              noTransition={turnInstant}
+            />
 
-            <div className="border-l border-r border-b border-black/70 rounded-bl-[10px] rounded-br-[10px] w-[474px] h-[20px] text-white text-right overflow-hidden bg-[#223C6C]">
-              <div className="pt-[4px] h-[20px] text-[11px] whitespace-nowrap overflow-hidden bg-[#3573E4]" style={{ width: '50%' }}>
-                100.9초
-              </div>
-            </div>
+            {/* 라운드 시간 그래프 */}
+            <GraphBar
+              className="border-l border-r border-b border-black/70 rounded-bl-[10px] rounded-br-[10px] w-[474px] h-[20px] bg-[#223C6C]"
+              min={0}
+              val={roundTime}
+              max={ROUND_TIME_LIMIT}
+              bgc="#3573E4"
+              label={`${roundTime.toFixed(1)}초`}
+            />
           </div>
         </div>
 
-        {/* Chain Section */}
+        {/* 연승 횟수 섹션 (오른손) */}
         <div 
           className="chain pt-[50px] mt-[50px] mx-[105px] mr-[40px] w-[100px] h-[110px] text-[24px] text-[#EEEEEE] font-bold text-center bg-[url('/img/righthand.png')] bg-no-repeat"
           style={{ textShadow: '0px 1px 5px #141414' }}
         >
-          0
+          {chainCount}
         </div>
-
-        {/* Custom Styles that can't be converted to Tailwind */}
-        <style jsx>{`
-          /* Animation for game fail text */
-          @keyframes FailBlink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-          }
-          
-          .game-fail-text {
-            animation: FailBlink 2s linear;
-            color: #FF7777;
-          }
-          
-          
-          /* Utility classes */
-          .round-extreme {
-            background-color: #FF6D6D !important;
-          }
-          
-          .sock-char {
-            text-align: center;
-          }
-          
-          .sock-picked {
-            color: #FFFF44;
-            font-weight: bold;
-            font-size: 24px;
-          }
-          
-          .display-text {
-            width: 20px;
-            text-align: center;
-            z-index: 1;
-          }
-          
-          .jjo-display-word-length {
-            color: orange;
-            font-size: 14px;
-          }
-        `}</style>
       </div>
 
-      {/* History Holder - Items 섹션과 같은 위치에서 시작 */}
-      <div className="ml-[105px]">
-        <HistoryHolder />
+      {/* 히스토리 및 입력창 */}
+      <div className="ml-[60px]">
+        <HistoryHolder historyItems={historyItems}/>
       </div>
       <div className='ml-[270px]'>
-          <GameInput 
-            placeholder="당신의 차례! 아래의 채팅 창에서 입력하세요."
-            readonly={false}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                // 채팅 전송 로직
-              }
-            }}
-          />
+          {inputVisible && (
+            <GameInput 
+              placeholder="당신의 차례! 아래의 채팅 창에서 입력하세요."
+              readonly={false}
+              value={chatInput}
+              onChange={handleChatInputChange}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleInput(chatInput);
+                }
+              }}
+              inputRef={inputRef}
+            />
+          )}
       </div>
     </>
   );
