@@ -5,6 +5,7 @@ import { useChat } from './hooks/useChat';
 import { useGameLogic } from './hooks/useGameLogic';
 import GraphBar from './components/GraphBar';
 import { useEffect } from 'react';
+import { duemLaw } from './lib/lib';
 
 /**
  * 게임의 메인 화면 컴포넌트
@@ -85,7 +86,7 @@ const GameHead: React.FC = () => {
       );
     }
     
-    return text;
+    return text.length === 1 && duemLaw(text, true) !== text ? `${text}(${duemLaw(text)})` : text ;
   };
 
   return (
@@ -94,7 +95,7 @@ const GameHead: React.FC = () => {
         {/* 미션 글자 섹션 (왼손) */}
         <div 
           className="items pt-[50px] mt-[50px] mx-[40px] ml-[105px] w-[100px] h-[110px] text-[24px] text-[#EEEEEE] font-bold text-center bg-[url('/img/lefthand.png')] bg-no-repeat"
-          style={{ textShadow: '0px 1px 5px #141414' }}
+          style={{ textShadow: '0px 1px 5px #141414', opacity: missionChar ? 1 : 0 }}
         >
           {missionChar}
         </div>

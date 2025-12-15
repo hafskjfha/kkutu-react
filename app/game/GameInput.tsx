@@ -44,6 +44,7 @@ const GameInput: React.FC<GameInputProps> = ({
         onChange={onChange}
         onKeyDown={onKeyDown}
         ref={inputRef}
+        autoComplete="off"
         className="
           w-[420px] 
           h-[40px] 

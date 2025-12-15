@@ -13,7 +13,7 @@ class SoundManager {
      * 게임 시작 시 호출되어야 합니다.
      */
     public load(){
-        for (let i = 1; i <= 10; i++) {
+        for (let i = 0; i <= 10; i++) {
             this.sounds[`T${i}`] = new Howl({
                 src: [`/audio/bgm/T${i}.mp3`],
                 volume: 1.0,

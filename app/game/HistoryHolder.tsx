@@ -134,7 +134,7 @@ const HistoryItem = ({
   const handleLeave = () => setHover(false);
 
   return (
-    <div ref={ref} onMouseEnter={handleEnter} onMouseMove={handleMouseMove} onMouseLeave={handleLeave} className="relative group h-10 w-[170px] px-3 py-1 rounded-lg m-1 text-gray-200 text-center bg-gray-800 flex flex-col justify-center items-center overflow-visible cursor-pointer">
+    <div ref={ref} onMouseEnter={handleEnter} onMouseMove={handleMouseMove} onMouseLeave={handleLeave} className="relative group h-10 w-[170px] px-3 py-1 rounded-lg m-1 text-gray-200 text-center bg-gray-800 flex flex-col justify-center items-center overflow-hidden cursor-pointer">
       {/* 첫 번째 줄: 단어 + 품사 */}
       <div className="flex items-center w-full overflow-hidden justify-center">
         <span className={`mr-1 ${getWordHeadStyle()} truncate max-w-[230px] text-center text-[14px]`}>
@@ -215,7 +215,7 @@ const HistoryItem = ({
 const HistoryHolder = ({historyItems}:{historyItems: {theme: string[]; word: string}[]}) => {
   return (
     <div className="w-[990px] h-10 relative">
-      <div className="w-[1200px] h-[42px] flex items-center overflow-x-auto overflow-y-visible">
+      <div className="w-[1200px] h-[42px] flex items-center overflow-x-auto overflow-y-hidden">
         {historyItems.map((item, index) => (
           <HistoryItem key={index} {...item} />
         ))}
