@@ -3,6 +3,7 @@ import { useChat } from './useChat';
 import { soundManager, stopAllSounds } from '../lib/sound';
 import { BEAT } from '../const';
 import gameManager from '../lib/gameManager';
+import { useGameState } from './useGameState';
 
 // defaults; will be updated from gameManager settings on init
 let TURN_TIME_LIMIT = 5; // seconds
@@ -461,19 +462,25 @@ export const useGameLogic = () => {
 
   // load mock DB on mount
   useEffect(() => {
-    const mockData = [
-      { word: '가나다', theme: ['테마A'] },
-      { word: '자동차', theme: ['테마B'] },
-    ];
-    const setting = { mode: 'normal' as const, notAgainSameChar: false, roundTime: 120000 };
-    try {
-      gameManager.loadWordDB(mockData, setting);
-    } catch (e) {}
     // update local time limits from setting
     const s = gameManager.getSetting();
     ROUND_TIME_LIMIT = Math.max(1, Math.round(s.roundTime / 1000));
     setRoundTime(ROUND_TIME_LIMIT);
     setTurnTime(TURN_TIME_LIMIT);
+  }, []);
+
+  // If a start was requested from the setup/chat before navigating
+  // to the game screen, auto-trigger the start sequence once this
+  // logic hook is mounted and ready.
+  useEffect(() => {
+    const { pendingStart, clearPendingStart } = useGameState.getState();
+    if (pendingStart) {
+      // clear flag immediately so it doesn't re-trigger
+      clearPendingStart();
+      // call the same handler as typing '/시작'
+      handleInput('/시작');
+    }
+    // we intentionally run only once on mount
   }, []);
 
   return {

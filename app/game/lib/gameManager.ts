@@ -57,14 +57,14 @@ class GameManager {
         return this.gameSetting;
     }
 
-    public loadWordDB(data: {word: string, theme: string[]}[], setting: GameSetting) {
+    public loadWordDB(data: {word: string, theme: string[]}[], setting: Partial<GameSetting>) {
         this.wordDB = data;
-        this.gameSetting = setting;
+        this.gameSetting = {...this.gameSetting, ...setting};
         this.wordSet = new Set(data.map(entry => entry.word));
         this.wordThemeDB = new Map(data.map(entry => [entry.word, entry.theme]));
-        if (setting.mode === 'normal') {
+        if (this.gameSetting.mode === 'normal') {
             this.NormalStartCharSet = new Set(data.map(entry => entry.word.charAt(0)));
-        } else if (setting.mode === 'mission') {
+        } else if (this.gameSetting.mode === 'mission') {
             for (const entry of data) {
                 for (const mchar of KOREAN_CHARS) {
                     if (entry.word.includes(mchar)) {

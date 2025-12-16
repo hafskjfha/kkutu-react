@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useChat } from './useChat';
+import { useGameState } from './useGameState';
 
 export interface ChatMessage {
   id: number;
@@ -27,6 +28,7 @@ export const useChatLog = () => {
   ]);
 
   const { chatInput, setChatInput } = useChat();
+  const { requestStart } = useGameState();
   const chatRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -34,6 +36,26 @@ export const useChatLog = () => {
    */
   const handleSendMessage = () => {
     if (chatInput.trim()) {
+      const trimmedInput = chatInput.trim();
+      
+      // 게임 시작 명령어 체크
+      if (trimmedInput === '/시작' || trimmedInput === '/ㄱ' || trimmedInput === '/r') {
+        const noticeMessage: ChatMessage = {
+          id: messages.length + 1,
+          username: '알림',
+          message: '게임을 시작합니다!',
+          timestamp: new Date().toLocaleTimeString('ko-KR', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          }),
+          isNotice: true
+        };
+        setMessages([...messages, noticeMessage]);
+        setChatInput('');
+        requestStart();
+        return;
+      }
+      
       const newMessage: ChatMessage = {
         id: messages.length + 1,
         username: '나',
