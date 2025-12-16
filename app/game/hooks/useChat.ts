@@ -9,6 +9,9 @@ type ChatContextType = {
     callGameInput: (s: string) => void;
     gameInputVisible: boolean;
     setGameInputVisible: (v: boolean) => void;
+    // allow registering a global sendHint function so other UI (GameHead) can trigger it
+    registerSendHint: (fn: (() => void) | null) => void;
+    sendHint: () => void;
 };
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -20,6 +23,7 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [chatInput, setChatInput] = useState("");
     const gameHandleRef = useRef<((s: string) => void) | null>(null);
+    const sendHintRef = useRef<(() => void) | null>(null);
     const [gameInputVisible, setGameInputVisible] = useState<boolean>(false);
 
     /**
@@ -41,9 +45,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
+    const registerSendHint = (fn: (() => void) | null) => {
+        sendHintRef.current = fn;
+    };
+
+    const sendHint = () => {
+        try {
+            sendHintRef.current?.();
+        } catch (e) {}
+    };
+
     return React.createElement(
         ChatContext.Provider,
-        { value: { chatInput, setChatInput, handleChatInputChange, registerGameHandleInput, callGameInput, gameInputVisible, setGameInputVisible } },
+        { value: { chatInput, setChatInput, handleChatInputChange, registerGameHandleInput, callGameInput, gameInputVisible, setGameInputVisible, registerSendHint, sendHint } },
         children
     );
 };

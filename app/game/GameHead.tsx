@@ -12,7 +12,7 @@ import { duemLaw } from './lib/lib';
  * 게임 진행 상황, 캐릭터, 타이머 등을 표시합니다.
  */
 const GameHead: React.FC = () => {
-  const { chatInput, handleChatInputChange } = useChat();
+  const { chatInput, handleChatInputChange, sendHint, setChatInput } = useChat();
   const {
     word,
     isFail,
@@ -29,7 +29,8 @@ const GameHead: React.FC = () => {
     inputRef,
     handleInput,
     TURN_TIME_LIMIT,
-    ROUND_TIME_LIMIT
+    ROUND_TIME_LIMIT,
+    hintVisible
   } = useGameLogic();
 
   // Register the game's input handler and visibility into chat context so
@@ -85,7 +86,9 @@ const GameHead: React.FC = () => {
         </span>
       );
     }
-    
+    if (hintVisible) {
+      return <span className="text-gray-400">{text}</span>;
+    }
     return text.length === 1 && duemLaw(text, true) !== text ? `${text}(${duemLaw(text)})` : text ;
   };
 
@@ -173,6 +176,25 @@ const GameHead: React.FC = () => {
               onChange={handleChatInputChange}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
+                  const trimmed = chatInput.trim();
+                  if (trimmed === '/ㅍ' || trimmed === '/v') {
+                    // trigger global hint sender registered in chat log
+                    sendHint();
+                    setChatInput('');
+                    return;
+                  }
+                  if (trimmed === '/gg' || trimmed === '/ㅈㅈ') {
+                    // forward to game handler which will end the game
+                    handleInput(trimmed);
+                    setChatInput('');
+                    return;
+                  }
+                  // support start aliases if user types from head input
+                  if (trimmed === '/시작' || trimmed === '/ㄱ' || trimmed === '/r') {
+                    handleInput(trimmed);
+                    setChatInput('');
+                    return;
+                  }
                   handleInput(chatInput);
                 }
               }}

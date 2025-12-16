@@ -1,5 +1,6 @@
 import { KOREAN_CHARS } from '../const';
-import { duemLaw } from './lib'
+import { duemLaw } from './lib';
+import { disassemble } from 'es-hangul';
 
 type GameSetting = {
     mode: 'normal' | 'mission';
@@ -31,10 +32,16 @@ class GameManager {
     private wordSet: Set<string> = new Set();
     private NormalStartCharSet: Set<string> = new Set();
     private MissionStartCharSet: Set<[string, string]> = new Set();
+    private NormalWordMap: Map<string, Set<string>> = new Map();
+    private MissionWordMap: Map<string, Set<string>> = new Map();
 
     private gameSetting: GameSetting = {mode: 'normal', notAgainSameChar: false, roundTime: 60000};
     private nowState: null | {startChar: string, missionChar: string | null} = null;
     private exclusionSet: Set<string | [string, string]> = new Set();
+
+    private hintStack: number = 0;
+    private hintWord: string = "";
+    private revealedIndices = new Set<number>();
 
     private constructor() {
         if (GameManager.instance) {
@@ -57,18 +64,39 @@ class GameManager {
         return this.gameSetting;
     }
 
+    private getMissionKey(startChar: string, missionChar: string): string {
+        return `${startChar}|${missionChar}`;
+    }
+
     public loadWordDB(data: {word: string, theme: string[]}[], setting: Partial<GameSetting>) {
-        this.wordDB = data;
+        const pattern = /[^a-zA-Z0-9가-힣ㄱ-ㅎ]/g;
+        this.wordDB = data.filter(entry => entry.word.replace(pattern, '').length > 1).map(entry => ({word: entry.word.replace(pattern, ''), theme: entry.theme}));
         this.gameSetting = {...this.gameSetting, ...setting};
-        this.wordSet = new Set(data.map(entry => entry.word));
-        this.wordThemeDB = new Map(data.map(entry => [entry.word, entry.theme]));
+        this.wordSet = new Set(this.wordDB.map(entry => entry.word));
+        this.wordThemeDB = new Map(this.wordDB.map(entry => [entry.word, entry.theme]));
+        
         if (this.gameSetting.mode === 'normal') {
-            this.NormalStartCharSet = new Set(data.map(entry => entry.word.charAt(0)));
+            this.NormalStartCharSet = new Set(this.wordDB.map(entry => entry.word.charAt(0)));
+            this.NormalWordMap.clear();
+            for (const entry of this.wordDB) {
+                const startChar = entry.word.charAt(0);
+                if (!this.NormalWordMap.has(startChar)) {
+                    this.NormalWordMap.set(startChar, new Set());
+                }
+                this.NormalWordMap.get(startChar)?.add(entry.word);
+            }
         } else if (this.gameSetting.mode === 'mission') {
-            for (const entry of data) {
+            this.MissionStartCharSet.clear();
+            this.MissionWordMap.clear();
+            for (const entry of this.wordDB) {
                 for (const mchar of KOREAN_CHARS) {
                     if (entry.word.includes(mchar)) {
                         this.MissionStartCharSet.add([entry.word.charAt(0), mchar]);
+                        const key = this.getMissionKey(entry.word.charAt(0), mchar);
+                        if (!this.MissionWordMap.has(key)) {
+                            this.MissionWordMap.set(key, new Set());
+                        }
+                        this.MissionWordMap.get(key)?.add(entry.word);
                     }
                 }
             }
@@ -152,6 +180,10 @@ class GameManager {
      * 
      */
     public gameStart(){
+        this.nowState = null;
+        this.hintStack = 0;
+        this.hintWord = "";
+        this.revealedIndices.clear();
         this.exclusionSet.clear();
         const nextSpeed = this.getTurnSpeed(this.gameSetting.roundTime);
         const nextTrunTime = 15000 - 1400 * nextSpeed;
@@ -179,8 +211,107 @@ class GameManager {
             const nextSpeed = this.getTurnSpeed(roundTime);
             const nextTrunTime = 15000 - 1400 * nextSpeed;
             const {startChar: nextChar, missionChar: nextMissionChar} = this.getStartChar(this.exclusionSet);
+            if (this.gameSetting.notAgainSameChar) this.exclusionSet.add(this.gameSetting.mode === 'normal' ? nextChar : [nextChar, nextMissionChar!]);
+            this.hintStack = 0;
+            this.hintWord = "";
+            this.revealedIndices.clear();
             return {ok: true, wordEntry, nextChar, nextMissionChar, turnSpeed: nextSpeed, trunTime: Math.min(roundTime, nextTrunTime + 100)};
         }
+    }
+
+    public getHint(){
+        if (this.nowState === null) return "";
+        if (this.gameSetting.mode === 'normal') {
+            const hintWords = Array.from(this.NormalWordMap.get(this.nowState.startChar) || []);
+            console.log('Hint words for', this.nowState.startChar, ':', hintWords);
+            if (hintWords.length > 0) {
+                const randomIndex = Math.floor(Math.random() * hintWords.length);
+                return `${hintWords[randomIndex]}`;
+            } else {
+                return "";
+            }
+        } else if (this.gameSetting.mode === 'mission') {
+            const hintWords = Array.from(this.MissionWordMap.get(this.getMissionKey(this.nowState.startChar, this.nowState.missionChar!)) || []);
+            if (hintWords.length > 0) {
+                const randomIndex = Math.floor(Math.random() * hintWords.length);
+                return `${hintWords[randomIndex]}`;
+            } else {
+                return "";
+            }
+        } else {
+            return "";
+        }
+    }
+
+    public gameEndHint() {
+        if (this.hintWord) return this.hintWord;
+        this.hintWord = this.getHint();
+        return this.hintWord;
+    }
+
+    public getHintWord() {
+        if (this.nowState === null) return null;
+        if (this.hintStack === 0) {
+            this.hintWord = this.getHint();
+        }
+        console.log('Hint word:', this.hintWord);
+        let currentHint = '';
+        const wordLength = this.hintWord.length;
+
+        if (this.hintStack === 0) {
+            for (let i = 0; i < wordLength; i++) {
+                currentHint += disassemble(this.hintWord[i])[0];
+            }
+        } else if (this.hintStack === 1) {
+            const maxRevealCount = Math.floor(wordLength / 3); // 최대 공개 글자 수 (1/3 이하)
+            let revealedCount = this.revealedIndices.size; // 현재 공개된 수 (0일 것임)
+            
+            // maxRevealCount만큼 랜덤한 인덱스를 Set에 추가
+            while (revealedCount < maxRevealCount) {
+                const randomIndex = Math.floor(Math.random() * wordLength);
+                if (!this.revealedIndices.has(randomIndex)) {
+                    this.revealedIndices.add(randomIndex);
+                    revealedCount++;
+                }
+            }
+
+            // 힌트 생성 (공개된 인덱스는 원본 글자, 나머지는 초성)
+            for (let i = 0; i < wordLength; i++) {
+                if (this.revealedIndices.has(i)) {
+                    currentHint += this.hintWord[i];
+                } else {
+                    currentHint += disassemble(this.hintWord[i])[0];
+                }
+            }
+        } else if (this.hintStack >= 2) {
+            const maxRevealCount = Math.floor(wordLength / 2); // 최대 공개 글자 수 (1/2 이하)
+            let revealedCount = this.revealedIndices.size; // 현재 공개된 글자 수
+            
+            // maxRevealCount에 도달할 때까지 랜덤한 인덱스를 Set에 추가
+            while (revealedCount < maxRevealCount) {
+                const randomIndex = Math.floor(Math.random() * wordLength);
+                if (!this.revealedIndices.has(randomIndex)) {
+                    this.revealedIndices.add(randomIndex);
+                    revealedCount++;
+                }
+            }
+            
+            // 힌트 생성 (공개된 인덱스는 원본 글자, 나머지는 초성)
+            for (let i = 0; i < wordLength; i++) {
+                if (this.revealedIndices.has(i)) {
+                    currentHint += this.hintWord[i];
+                } else {
+                    currentHint += disassemble(this.hintWord[i])[0];
+                }
+            }
+        }
+        this.hintStack++;
+
+        return currentHint;
+    }
+
+    public gameEnd() {
+        
     }
 }
 

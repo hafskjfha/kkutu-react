@@ -30,6 +30,7 @@ export const useGameLogic = () => {
   const [visibleChars, setVisibleChars] = useState<boolean[]>([]);
   const [pulseOn, setPulseOn] = useState(false);
   const [lastState, setLastState] = useState<{turnTime: number; roundTime: number; speed: number} | null>(null);
+  const [hintVisible, setHintVisible] = useState(false);
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const failTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -71,9 +72,13 @@ export const useGameLogic = () => {
     setIsGameStarted(false);
     setIsPaused(true);
     setIsFail(false);
-    setWord(`게임종료! 성공 단어수 ${chainCount}`);
-    setInputVisible(true);
+    const hintWord = gameManager.gameEndHint();
+    console.log('Game ended, hint word:', hintWord);
+    setWord(hintWord);
+    setHintVisible(!!hintWord);
+    setInputVisible(false);
     setAnimatingWord(null);
+    gameManager.gameEnd();
   };
 
   // 타이머 로직
@@ -167,7 +172,7 @@ export const useGameLogic = () => {
    * 사용자 입력 처리
    */
   const handleInput = (input: string) => {
-    if (input === '/시작') {
+    if (input === '/시작' || input === '/ㄱ' || input === '/r') {
       // Initialize history and timings from gameManager
       setHistoryItems([]);
       const setting = gameManager.getSetting();
@@ -179,6 +184,8 @@ export const useGameLogic = () => {
       setChatInput('');
       setIsPaused(true);
       setInputVisible(false);
+      setHintVisible(false);
+      setChainCount(0);
       setWord('게임이 곧 시작됩니다');
 
       try {
@@ -227,6 +234,12 @@ export const useGameLogic = () => {
         setIsPaused(false);
         startNewCycle();
       }
+      return;
+    }
+
+    // 즉시 게임 종료 명령어
+    if (input === '/gg' || input === '/ㅈㅈ') {
+      endGame();
       return;
     }
 
@@ -483,6 +496,20 @@ export const useGameLogic = () => {
     // we intentionally run only once on mount
   }, []);
 
+  // Also react to pendingStart changes while this hook is mounted.
+  // This allows chat commands that set `pendingStart` (e.g. /ㄱ, /r)
+  // to trigger a restart even when the game UI is already mounted
+  // or when a game has just ended.
+  const pendingStart = useGameState(state => state.pendingStart);
+  const clearPendingStart = useGameState(state => state.clearPendingStart);
+
+  useEffect(() => {
+    if (pendingStart) {
+      clearPendingStart();
+      handleInput('/시작');
+    }
+  }, [pendingStart, clearPendingStart]);
+
   return {
     word,
     isFail,
@@ -500,6 +527,7 @@ export const useGameLogic = () => {
     inputRef,
     handleInput,
     TURN_TIME_LIMIT,
-    ROUND_TIME_LIMIT
+    ROUND_TIME_LIMIT,
+    hintVisible
   };
 };

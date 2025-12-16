@@ -9,7 +9,7 @@ import { useChatLog } from './hooks/useChatLog';
  */
 const KkutuChat: React.FC = () => {
   const { chatInput, handleChatInputChange } = useChat();
-  const { messages, chatRef, handleSendMessage } = useChatLog();
+  const { messages, chatRef, handleSendMessage, sendHint } = useChatLog();
   const { callGameInput, gameInputVisible } = useChat();
 
   return (
@@ -59,20 +59,25 @@ const KkutuChat: React.FC = () => {
 
       {/* 입력 영역 */}
       <div className="flex border-t border-gray-300">
-        <input
+            <input
           type="text"
           value={chatInput}
           onChange={handleChatInputChange}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               // If the game input is visible, forward Enter to the registered game handler
-              if (gameInputVisible) {
-                e.preventDefault();
-                if (chatInput.trim()) {
-                  callGameInput(chatInput);
-                }
-                return;
-              }
+                    if (gameInputVisible) {
+                      e.preventDefault();
+                      const trimmed = chatInput.trim();
+                      if (trimmed === '/ㅍ' || trimmed === '/v') {
+                        sendHint();
+                        return;
+                      }
+                      if (trimmed) {
+                        callGameInput(chatInput);
+                      }
+                      return;
+                    }
 
               // otherwise send as chat message
               handleSendMessage();

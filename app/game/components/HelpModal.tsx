@@ -13,7 +13,7 @@ const HelpModal: React.FC<Props> = ({ onClose }) => {
         </div>
         <div className="text-sm text-gray-700 space-y-2">
           <p>1. txt 파일로 단어 목록을 업로드하세요 (한 줄에 하나씩).</p>
-          <p>2. 단어는 자동으로 IndexedDB에 저장되어 다음 방문 시에도 유지됩니다.</p>
+          <p>2. 단어와 설정은 자동으로 로컬에 저장되어 다음 방문 시에도 유지됩니다.</p>
           <p>3. 단어 목록 조회 버튼으로 등록된 단어를 관리할 수 있습니다.</p>
           <p>4. 준비가 완료되면 시작 버튼을 눌러 게임을 시작하세요. 또는 채팅창에 <strong>/시작</strong>, <strong>/ㄱ</strong>, <strong>/r</strong>을 입력하세요.</p>
         </div>
