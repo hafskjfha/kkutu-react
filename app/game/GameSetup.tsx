@@ -17,6 +17,8 @@ const GameSetup: React.FC = () => {
   const [localSetting, setLocalSetting] = useState<{
     roundTimeSeconds: number;
     notAgainSameChar: boolean;
+    lang: 'ko' | 'en';
+    mode: 'normal' | 'mission';
   } | null>(null);
 
   // 컴포넌트 마운트 시 저장된 단어와 설정을 불러옴
@@ -30,29 +32,54 @@ const GameSetup: React.FC = () => {
       const raw = localStorage.getItem('kkutu_game_setting');
       if (raw) {
         const parsed = JSON.parse(raw);
-        setLocalSetting(parsed);
+        const merged = {
+          roundTimeSeconds: parsed.roundTimeSeconds ?? Math.round(gameManager.getSetting().roundTime / 1000),
+          notAgainSameChar: parsed.notAgainSameChar ?? gameManager.getSetting().notAgainSameChar,
+          lang: parsed.lang ?? gameManager.getSetting().lang,
+          mode: parsed.mode ?? gameManager.getSetting().mode,
+        };
+        setLocalSetting(merged);
         gameManager.updateSetting({
-          roundTime: parsed.roundTimeSeconds * 1000,
-          notAgainSameChar: parsed.notAgainSameChar,
+          roundTime: merged.roundTimeSeconds * 1000,
+          notAgainSameChar: merged.notAgainSameChar,
+          lang: merged.lang,
+          mode: merged.mode,
         });
       } else {
         const cur = gameManager.getSetting();
-        setLocalSetting({ roundTimeSeconds: Math.round(cur.roundTime / 1000), notAgainSameChar: cur.notAgainSameChar });
+        setLocalSetting({ roundTimeSeconds: Math.round(cur.roundTime / 1000), notAgainSameChar: cur.notAgainSameChar, lang: cur.lang, mode: cur.mode });
       }
     } catch (e) {
       const cur = gameManager.getSetting();
-      setLocalSetting({ roundTimeSeconds: Math.round(cur.roundTime / 1000), notAgainSameChar: cur.notAgainSameChar });
+      setLocalSetting({ roundTimeSeconds: Math.round(cur.roundTime / 1000), notAgainSameChar: cur.notAgainSameChar, lang: cur.lang, mode: cur.mode });
     }
   };
-
-  const handleSettingChange = (roundTimeSeconds: number, notAgain: boolean) => {
-    const newSetting = { roundTimeSeconds, notAgainSameChar: notAgain } as any;
-    setLocalSetting({ roundTimeSeconds, notAgainSameChar: notAgain });
-    gameManager.updateSetting({ roundTime: roundTimeSeconds * 1000, notAgainSameChar: notAgain });
+  const handleSettingChange = async (partial: Partial<{roundTimeSeconds: number; notAgainSameChar: boolean; lang: 'ko'|'en'; mode: 'normal'|'mission'}>) => {
+    const cur = gameManager.getSetting();
+    const merged = {
+      roundTimeSeconds: partial.roundTimeSeconds ?? localSetting?.roundTimeSeconds ?? Math.round(cur.roundTime / 1000),
+      notAgainSameChar: partial.notAgainSameChar ?? localSetting?.notAgainSameChar ?? cur.notAgainSameChar,
+      lang: partial.lang ?? localSetting?.lang ?? cur.lang,
+      mode: partial.mode ?? localSetting?.mode ?? cur.mode,
+    };
+    setLocalSetting(merged);
+    gameManager.updateSetting({ roundTime: merged.roundTimeSeconds * 1000, notAgainSameChar: merged.notAgainSameChar, lang: merged.lang, mode: merged.mode });
     try {
-      localStorage.setItem('kkutu_game_setting', JSON.stringify({ roundTimeSeconds, notAgainSameChar: notAgain }));
+      localStorage.setItem('kkutu_game_setting', JSON.stringify(merged));
     } catch (e) {
       // ignore storage errors
+    }
+
+    // If words exist, reload DB so maps reflect mode changes
+    try {
+      const exists = await hasWords();
+      if (exists) {
+        const words = await getAllWords();
+        gameManager.loadWordDB(words.map(({word,theme}) => ({word, theme: theme.split(',')})), gameManager.getSetting());
+        setWordCount(words.length);
+      }
+    } catch (e) {
+      // ignore
     }
   };
 
@@ -163,7 +190,8 @@ const GameSetup: React.FC = () => {
             <div className="space-y-3">
               <div>
                 <label className="block text-sm text-gray-700 mb-2">라운드 시간</label>
-                <select value={localSetting?.roundTimeSeconds ?? 60} onChange={(e) => handleSettingChange(parseInt(e.target.value, 10), localSetting?.notAgainSameChar ?? false)} className="w-full px-3 py-2 border rounded-lg">
+                <select value={localSetting?.roundTimeSeconds ?? 60} onChange={(e) => handleSettingChange({ roundTimeSeconds: parseInt(e.target.value, 10) })} className="w-full px-3 py-2 border rounded-lg">
+                  <option value={0}>무제한</option>
                   <option value={10}>10초</option>
                   <option value={30}>30초</option>
                   <option value={60}>60초</option>
@@ -174,15 +202,28 @@ const GameSetup: React.FC = () => {
               </div>
 
               <div>
+                <label className="block text-sm text-gray-700 mb-2">언어</label>
+                <select value={localSetting?.lang ?? 'ko'} onChange={(e) => handleSettingChange({ lang: e.target.value as 'ko' | 'en' })} className="w-full px-3 py-2 border rounded-lg">
+                  <option value="ko">한국어</option>
+                  <option value="en">English</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-700 mb-2">모드</label>
+                <select value={localSetting?.mode ?? 'normal'} onChange={(e) => handleSettingChange({ mode: e.target.value as 'normal' | 'mission' })} className="w-full px-3 py-2 border rounded-lg">
+                  <option value="normal">일반</option>
+                  <option value="mission">미션</option>
+                </select>
+              </div>
+
+              <div>
                 <label className="inline-flex items-center gap-2">
-                  <input type="checkbox" checked={localSetting?.notAgainSameChar ?? false} onChange={(e) => handleSettingChange(localSetting?.roundTimeSeconds ?? 60, e.target.checked)} />
+                  <input type="checkbox" checked={localSetting?.notAgainSameChar ?? false} onChange={(e) => handleSettingChange({ notAgainSameChar: e.target.checked })} />
                   <span className="text-sm text-gray-700">이전에 나온글자 미표시</span>
                 </label>
               </div>
               
-              <div className="text-sm text-gray-600">
-                • 게임 시작은 메뉴의 시작 버튼 또는 채팅의 /시작, /ㄱ, /r 로 가능합니다.
-              </div>
             </div>
           </div>
         </div>

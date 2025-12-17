@@ -1,5 +1,13 @@
 import React, { createContext, useContext, useRef, useState } from "react";
 
+export interface ChatMessage {
+    id: number;
+    username: string;
+    message: string;
+    timestamp: string;
+    isNotice?: boolean;
+}
+
 type ChatContextType = {
     chatInput: string;
     setChatInput: (v: string) => void;
@@ -12,6 +20,11 @@ type ChatContextType = {
     // allow registering a global sendHint function so other UI (GameHead) can trigger it
     registerSendHint: (fn: (() => void) | null) => void;
     sendHint: () => void;
+    // chat log shared state and helpers
+    messages: ChatMessage[];
+    setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+    chatRef: React.RefObject<HTMLDivElement | null>;
+    clearMessagesAndShowStartNotice: () => void;
 };
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -25,6 +38,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const gameHandleRef = useRef<((s: string) => void) | null>(null);
     const sendHintRef = useRef<(() => void) | null>(null);
     const [gameInputVisible, setGameInputVisible] = useState<boolean>(false);
+    const [messages, setMessages] = useState<ChatMessage[]>([
+        {
+            id: 1,
+            username: '알림',
+            message: '게임방에 입장하셨습니다.',
+            timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+            isNotice: true
+        }
+    ]);
+    const chatRef = useRef<HTMLDivElement>(null);
 
     /**
      * 채팅 입력값 변경 핸들러
@@ -55,9 +78,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (e) {}
     };
 
+    const clearMessagesAndShowStartNotice = () => {
+        const noticeMessage: ChatMessage = {
+            id: Date.now(),
+            username: '알림',
+            message: '게임을 시작합니다!',
+            timestamp: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+            isNotice: true
+        };
+        setMessages([noticeMessage]);
+        setChatInput('');
+    };
+
     return React.createElement(
         ChatContext.Provider,
-        { value: { chatInput, setChatInput, handleChatInputChange, registerGameHandleInput, callGameInput, gameInputVisible, setGameInputVisible, registerSendHint, sendHint } },
+        { value: { chatInput, setChatInput, handleChatInputChange, registerGameHandleInput, callGameInput, gameInputVisible, setGameInputVisible, registerSendHint, sendHint, messages, setMessages, chatRef, clearMessagesAndShowStartNotice } },
         children
     );
 };

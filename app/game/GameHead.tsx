@@ -6,6 +6,7 @@ import { useGameLogic } from './hooks/useGameLogic';
 import GraphBar from './components/GraphBar';
 import { useEffect } from 'react';
 import { duemLaw } from './lib/lib';
+import GameResultModal from './components/GameResultModal';
 
 /**
  * 게임의 메인 화면 컴포넌트
@@ -30,7 +31,9 @@ const GameHead: React.FC = () => {
     handleInput,
     TURN_TIME_LIMIT,
     ROUND_TIME_LIMIT,
-    hintVisible
+    hintVisible,
+    gameResult,
+    closeGameResult
   } = useGameLogic();
 
   // Register the game's input handler and visibility into chat context so
@@ -89,24 +92,25 @@ const GameHead: React.FC = () => {
     if (hintVisible) {
       return <span className="text-gray-400">{text}</span>;
     }
-    return text.length === 1 && duemLaw(text, true) !== text ? `${text}(${duemLaw(text)})` : text ;
+    return text && text.length === 1 && duemLaw(text, true) !== text ? `${text}(${duemLaw(text)})` : text ;
   };
 
   return (
     <>
-      <div className="game-head flex items-start">
-        {/* 미션 글자 섹션 (왼손) */}
-        <div 
-          className="items pt-[50px] mt-[50px] mx-[40px] ml-[105px] w-[100px] h-[110px] text-[24px] text-[#EEEEEE] font-bold text-center bg-[url('/img/lefthand.png')] bg-no-repeat"
-          style={{ textShadow: '0px 1px 5px #141414', opacity: missionChar ? 1 : 0 }}
-        >
-          {missionChar}
-        </div>
+      <div className="relative">
+        <div className="game-head flex items-start">
+          {/* 미션 글자 섹션 (왼손) */}
+          <div 
+            className="items pt-[50px] mt-[50px] mx-[40px] ml-[105px] w-[100px] h-[110px] text-[24px] text-[#EEEEEE] font-bold text-center bg-[url('/img/lefthand.png')] bg-no-repeat"
+            style={{ textShadow: '0px 1px 5px #141414', opacity: missionChar ? 1 : 0 }}
+          >
+            {missionChar}
+          </div>
 
-        {/* 쪼리핑 캐릭터 및 디스플레이 섹션 */}
-        <div className="jjoriping w-[500px]">
-          {/* 캐릭터 얼굴 */}
-          <div className="relative">
+          {/* 쪼리핑 캐릭터 및 디스플레이 섹션 */}
+          <div className="jjoriping w-[500px]">
+            {/* 캐릭터 얼굴 */}
+            <div className="relative">
             <img 
               className="absolute top-[11px] left-[32px]" 
               src="/img/jjoeyeL.png" 
@@ -154,13 +158,24 @@ const GameHead: React.FC = () => {
           </div>
         </div>
 
-        {/* 연승 횟수 섹션 (오른손) */}
-        <div 
-          className="chain pt-[50px] mt-[50px] mx-[105px] mr-[40px] w-[100px] h-[110px] text-[24px] text-[#EEEEEE] font-bold text-center bg-[url('/img/righthand.png')] bg-no-repeat"
-          style={{ textShadow: '0px 1px 5px #141414' }}
-        >
-          {chainCount}
+          {/* 연승 횟수 섹션 (오른손) */}
+          <div 
+            className="chain pt-[50px] mt-[50px] mx-[105px] mr-[40px] w-[100px] h-[110px] text-[24px] text-[#EEEEEE] font-bold text-center bg-[url('/img/righthand.png')] bg-no-repeat"
+            style={{ textShadow: '0px 1px 5px #141414' }}
+          >
+            {chainCount}
+          </div>
         </div>
+
+        {/* 게임 결과 다이얼로그 - absolute 위치로 우측 상단에 배치 */}
+        {gameResult && (
+          <div className="absolute top-[50px] right-[40px] z-50">
+            <GameResultModal 
+              usedWords={gameResult} 
+              onClose={closeGameResult} 
+            />
+          </div>
+        )}
       </div>
 
       {/* 히스토리 및 입력창 */}
@@ -190,7 +205,7 @@ const GameHead: React.FC = () => {
                     return;
                   }
                   // support start aliases if user types from head input
-                  if (trimmed === '/시작' || trimmed === '/ㄱ' || trimmed === '/r') {
+                  if (trimmed === '/시작') {
                     handleInput(trimmed);
                     setChatInput('');
                     return;

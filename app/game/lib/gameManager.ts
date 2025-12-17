@@ -3,6 +3,7 @@ import { duemLaw } from './lib';
 import { disassemble } from 'es-hangul';
 
 type GameSetting = {
+    lang: 'ko' | 'en';
     mode: 'normal' | 'mission';
     notAgainSameChar: boolean;
     roundTime: number; // ms
@@ -35,8 +36,9 @@ class GameManager {
     private NormalWordMap: Map<string, Set<string>> = new Map();
     private MissionWordMap: Map<string, Set<string>> = new Map();
 
-    private gameSetting: GameSetting = {mode: 'normal', notAgainSameChar: false, roundTime: 60000};
+    private gameSetting: GameSetting = {lang: 'ko', mode: 'normal', notAgainSameChar: false, roundTime: 60000};
     private nowState: null | {startChar: string, missionChar: string | null} = null;
+    private usedWords: {char: string, word: string, missionChar: string | null, useHintCount: number, isFailed?: boolean}[] = [];
     private exclusionSet: Set<string | [string, string]> = new Set();
 
     private hintStack: number = 0;
@@ -119,16 +121,19 @@ class GameManager {
      * @returns - 턴 속도 (0~10)
      */
     public getTurnSpeed(roundTime: number): number {
-        if(roundTime < 5000) return 10;
-        else if(roundTime < 11000) return 9;
-        else if(roundTime < 18000) return 8;
-        else if(roundTime < 26000) return 7;
-        else if(roundTime < 35000) return 6;
-        else if(roundTime < 45000) return 5;
-        else if(roundTime < 56000) return 4;
-        else if(roundTime < 68000) return 3;
-        else if(roundTime < 81000) return 2;
-        else if(roundTime < 95000) return 1;
+        // If roundTime is 0 (convention for unlimited) or non-finite (Infinity),
+        // treat it as unlimited and return the slowest speed (0).
+        if (roundTime === 0 || !isFinite(roundTime)) return 0;
+        if (roundTime < 5000) return 10;
+        else if (roundTime < 11000) return 9;
+        else if (roundTime < 18000) return 8;
+        else if (roundTime < 26000) return 7;
+        else if (roundTime < 35000) return 6;
+        else if (roundTime < 45000) return 5;
+        else if (roundTime < 56000) return 4;
+        else if (roundTime < 68000) return 3;
+        else if (roundTime < 81000) return 2;
+        else if (roundTime < 95000) return 1;
         else return 0;
     }
 
@@ -146,12 +151,10 @@ class GameManager {
                     const randomIndex = Math.floor(Math.random() * availableChars.size);
                     const startChar = Array.from(availableChars)[randomIndex];
                     this.nowState = {startChar, missionChar: null};
-                    return this.nowState;
                 }
             }
             const randomIndex = Math.floor(Math.random() * this.NormalStartCharSet.size);
             this.nowState = {startChar: Array.from(this.NormalStartCharSet)[randomIndex], missionChar: null};
-            return this.nowState;
         }
         else if (this.gameSetting.mode === 'mission') {
             if (this.gameSetting.notAgainSameChar && exclusion.size > 0) {
@@ -160,15 +163,15 @@ class GameManager {
                     const randomIndex = Math.floor(Math.random() * availablePairs.size);
                     const [startChar, missionChar] = Array.from(availablePairs)[randomIndex];
                     this.nowState = {startChar, missionChar};
-                    return this.nowState;
                 }
             }
             const randomIndex = Math.floor(Math.random() * this.MissionStartCharSet.size);
             const [startChar, missionChar] = Array.from(this.MissionStartCharSet)[randomIndex];
             this.nowState = {startChar, missionChar};
-            return this.nowState;
+        } else {
+            this.nowState = {startChar: '', missionChar: null};
         }
-        return {startChar: '', missionChar: null};
+        return this.nowState
     }
 
     public getCurrentState() {
@@ -186,7 +189,12 @@ class GameManager {
         this.revealedIndices.clear();
         this.exclusionSet.clear();
         const nextSpeed = this.getTurnSpeed(this.gameSetting.roundTime);
-        const nextTrunTime = 15000 - 1400 * nextSpeed;
+        let nextTrunTime = 15000 - 1400 * nextSpeed;
+        this.usedWords = [];
+        if (this.gameSetting.roundTime === 0 || !isFinite(this.gameSetting.roundTime)) {
+            // when round is unlimited, make turn time unlimited as well
+            nextTrunTime = Infinity;
+        }
         return {...this.getStartChar(), turnTime: nextTrunTime, turnSpeed: nextSpeed};
     }
 
@@ -198,6 +206,8 @@ class GameManager {
      * @returns - 단어 제출 결과
      */
     public submitWord(word: string, roundTime: number): SubminWordResult {
+        const startChar = this.nowState ? this.nowState.startChar : '';
+        const missionChar = this.nowState ? this.nowState.missionChar : null;
         if (!this.isValidWord(word) || this.nowState === null) {
             return {ok: false, reason: ""};
         } else if (this.gameSetting.mode === "mission" && this.nowState.missionChar && !word.includes(this.nowState.missionChar)) {
@@ -212,10 +222,14 @@ class GameManager {
             const nextTrunTime = 15000 - 1400 * nextSpeed;
             const {startChar: nextChar, missionChar: nextMissionChar} = this.getStartChar(this.exclusionSet);
             if (this.gameSetting.notAgainSameChar) this.exclusionSet.add(this.gameSetting.mode === 'normal' ? nextChar : [nextChar, nextMissionChar!]);
+            const usedHintCount = this.hintStack;
             this.hintStack = 0;
             this.hintWord = "";
             this.revealedIndices.clear();
-            return {ok: true, wordEntry, nextChar, nextMissionChar, turnSpeed: nextSpeed, trunTime: Math.min(roundTime, nextTrunTime + 100)};
+            // If incoming roundTime is 0 (unlimited) or non-finite, return unlimited turn time as well.
+            const actualTrunTime = (roundTime === 0 || !isFinite(roundTime)) ? Infinity : Math.min(roundTime, nextTrunTime + 100);
+            this.usedWords.push({char: startChar, word, missionChar: missionChar, useHintCount: usedHintCount});
+            return {ok: true, wordEntry, nextChar, nextMissionChar, turnSpeed: nextSpeed, trunTime: actualTrunTime};
         }
     }
 
@@ -258,24 +272,24 @@ class GameManager {
         let currentHint = '';
         const wordLength = this.hintWord.length;
 
-        if (this.hintStack === 0) {
-            for (let i = 0; i < wordLength; i++) {
-                currentHint += disassemble(this.hintWord[i])[0];
-            }
-        } else if (this.hintStack === 1) {
-            const maxRevealCount = Math.floor(wordLength / 3); // 최대 공개 글자 수 (1/3 이하)
-            let revealedCount = this.revealedIndices.size; // 현재 공개된 수 (0일 것임)
-            
-            // maxRevealCount만큼 랜덤한 인덱스를 Set에 추가
-            while (revealedCount < maxRevealCount) {
+        const revealRandomIndices = (targetCount: number) => {
+            let revealedCount = this.revealedIndices.size;
+            while (revealedCount < targetCount) {
                 const randomIndex = Math.floor(Math.random() * wordLength);
                 if (!this.revealedIndices.has(randomIndex)) {
                     this.revealedIndices.add(randomIndex);
                     revealedCount++;
                 }
             }
+        };
 
-            // 힌트 생성 (공개된 인덱스는 원본 글자, 나머지는 초성)
+        if (this.hintStack === 0) {
+            for (let i = 0; i < wordLength; i++) {
+                currentHint += disassemble(this.hintWord[i])[0];
+            }
+        } else if (this.hintStack === 1) {
+            const maxRevealCount = Math.floor(wordLength / 3); // 1/3
+            revealRandomIndices(maxRevealCount);
             for (let i = 0; i < wordLength; i++) {
                 if (this.revealedIndices.has(i)) {
                     currentHint += this.hintWord[i];
@@ -283,20 +297,33 @@ class GameManager {
                     currentHint += disassemble(this.hintWord[i])[0];
                 }
             }
-        } else if (this.hintStack >= 2) {
-            const maxRevealCount = Math.floor(wordLength / 2); // 최대 공개 글자 수 (1/2 이하)
-            let revealedCount = this.revealedIndices.size; // 현재 공개된 글자 수
-            
-            // maxRevealCount에 도달할 때까지 랜덤한 인덱스를 Set에 추가
-            while (revealedCount < maxRevealCount) {
-                const randomIndex = Math.floor(Math.random() * wordLength);
-                if (!this.revealedIndices.has(randomIndex)) {
-                    this.revealedIndices.add(randomIndex);
-                    revealedCount++;
+        } else if (this.hintStack === 2) {
+            const maxRevealCount = Math.floor(wordLength / 2); // 1/2
+            revealRandomIndices(maxRevealCount);
+            for (let i = 0; i < wordLength; i++) {
+                if (this.revealedIndices.has(i)) {
+                    currentHint += this.hintWord[i];
+                } else {
+                    currentHint += disassemble(this.hintWord[i])[0];
                 }
             }
-            
-            // 힌트 생성 (공개된 인덱스는 원본 글자, 나머지는 초성)
+        } else if (this.hintStack === 3) {
+            const maxRevealCount = Math.floor((wordLength * 2) / 3); // 2/3
+            revealRandomIndices(maxRevealCount);
+            for (let i = 0; i < wordLength; i++) {
+                if (this.revealedIndices.has(i)) {
+                    currentHint += this.hintWord[i];
+                } else {
+                    currentHint += disassemble(this.hintWord[i])[0];
+                }
+            }
+        } else if (this.hintStack >= 4) {
+            // fully reveal the word when hintStack >= 4
+            currentHint = this.hintWord;
+        } else {
+            // default for other cases (e.g., hintStack === 4): reveal up to half
+            const maxRevealCount = Math.floor(wordLength / 2);
+            revealRandomIndices(maxRevealCount);
             for (let i = 0; i < wordLength; i++) {
                 if (this.revealedIndices.has(i)) {
                     currentHint += this.hintWord[i];
@@ -311,7 +338,10 @@ class GameManager {
     }
 
     public gameEnd() {
-        
+        if (!this.usedWords[0]?.isFailed) {
+            this.usedWords.push({char: this.nowState ? this.nowState.startChar : '', word: this.hintWord, missionChar: this.nowState ? this.nowState.missionChar : null, useHintCount: this.hintStack, isFailed: true});
+        }
+        return { usedWords: this.usedWords }
     }
 }
 

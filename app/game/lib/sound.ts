@@ -51,6 +51,11 @@ class SoundManager {
             src: ["/audio/game/round_start.mp3"],
             volume: 1.0,
         });
+        this.sounds["jaqwiBGM"] = new Howl({
+            src: ["/audio/bgm/jaqwiBGM.mp3"],
+            volume: 1.0,
+            loop: true,
+        });
         
     }
 

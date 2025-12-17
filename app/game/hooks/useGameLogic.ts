@@ -13,7 +13,7 @@ let ROUND_TIME_LIMIT = 120; // seconds
  * 게임의 핵심 로직을 관리하는 커스텀 훅
  */
 export const useGameLogic = () => {
-  const { chatInput, setChatInput } = useChat();
+  const { chatInput, setChatInput, clearMessagesAndShowStartNotice } = useChat();
   const [word, setWord] = useState("/시작을 입력하면 게임시작!");
   const [isFail, setIsFail] = useState(false);
   const [isGameStarted, setIsGameStarted] = useState(false);
@@ -22,6 +22,7 @@ export const useGameLogic = () => {
   const [turnTime, setTurnTime] = useState(TURN_TIME_LIMIT);
   const [roundTime, setRoundTime] = useState(ROUND_TIME_LIMIT);
   const [isPaused, setIsPaused] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
   const [missionChar, setMissionChar] = useState("");
   const [historyItems, setHistoryItems] = useState<{theme: string[]; word: string}[]>([]);
   const [inputVisible, setInputVisible] = useState(true);
@@ -31,9 +32,11 @@ export const useGameLogic = () => {
   const [pulseOn, setPulseOn] = useState(false);
   const [lastState, setLastState] = useState<{turnTime: number; roundTime: number; speed: number} | null>(null);
   const [hintVisible, setHintVisible] = useState(false);
+  const [gameResult, setGameResult] = useState<{char: string, word: string, missionChar: string | null, useHintCount: number}[] | null>(null);
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const failTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const startTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const beatTimeoutRefs = useRef<NodeJS.Timeout[]>([]);
   const hadFocusRef = useRef<boolean>(false);
@@ -48,6 +51,26 @@ export const useGameLogic = () => {
       inputRef.current?.focus();
       hadFocusRef.current = false;
     }
+  };
+
+  const playBGMForSpeed = (speed?: number) => {
+    try {
+      if (typeof speed === 'number' && speed === 0) {
+        soundManager.play('jaqwiBGM');
+      } else {
+        soundManager.play(`T${speed}`);
+      }
+    } catch (e) {}
+  };
+
+  const stopBGMForSpeed = (speed?: number) => {
+    try {
+      if (typeof speed === 'number' && speed === 0) {
+        soundManager.stop('jaqwiBGM');
+      } else {
+        soundManager.stop(`T${speed}`);
+      }
+    } catch (e) {}
   };
 
   /**
@@ -65,20 +88,30 @@ export const useGameLogic = () => {
       clearTimeout(failTimeoutRef.current);
       failTimeoutRef.current = null;
     }
+    if (startTimeoutRef.current) {
+      clearTimeout(startTimeoutRef.current);
+      startTimeoutRef.current = null;
+    }
     
     beatTimeoutRefs.current.forEach(timeout => clearTimeout(timeout));
     beatTimeoutRefs.current = [];
 
     setIsGameStarted(false);
+    setIsStarting(false);
     setIsPaused(true);
     setIsFail(false);
+    // clear chat input when game ends
+    try { setChatInput(''); } catch (e) {}
     const hintWord = gameManager.gameEndHint();
     console.log('Game ended, hint word:', hintWord);
     setWord(hintWord);
     setHintVisible(!!hintWord);
     setInputVisible(false);
     setAnimatingWord(null);
-    gameManager.gameEnd();
+    
+    // 게임 결과 가져오기
+    const result = gameManager.gameEnd();
+    setGameResult(result.usedWords);
   };
 
   // 타이머 로직
@@ -86,6 +119,7 @@ export const useGameLogic = () => {
     if (isGameStarted && !isPaused) {
       timerRef.current = setInterval(() => {
         setTurnTime((prev) => {
+          if (prev === Infinity) return prev;
           const newVal = Math.max(0, +(prev - 0.05).toFixed(2));
           if (newVal <= 0) {
             endGame();
@@ -94,6 +128,7 @@ export const useGameLogic = () => {
           return newVal;
         });
         setRoundTime((prev) => {
+          if (prev === Infinity) return prev;
           const newVal = Math.max(0, +(prev - 0.05).toFixed(2));
           if (newVal <= 0) {
             endGame();
@@ -172,15 +207,31 @@ export const useGameLogic = () => {
    * 사용자 입력 처리
    */
   const handleInput = (input: string) => {
-    if (input === '/시작' || input === '/ㄱ' || input === '/r') {
+    if (input === '/시작') {
+      // prevent starting a new game while one is already active or already starting
+      if (isGameStarted || isStarting) {
+        try { setChatInput(''); } catch (e) {}
+        return;
+      }
+      // mark that a start sequence is in progress so aliases cannot re-trigger it
+      setIsStarting(true);
+      // 게임 결과 다이얼로그 닫기
+      setGameResult(null);
       // Initialize history and timings from gameManager
       setHistoryItems([]);
+      setMissionChar("");
       const setting = gameManager.getSetting();
-      // roundTime in gameManager is ms
-      ROUND_TIME_LIMIT = Math.max(1, Math.round(setting.roundTime / 1000));
+      // roundTime in gameManager is ms; 0 means unlimited
+      if (setting.roundTime === 0) {
+        ROUND_TIME_LIMIT = Infinity;
+      } else {
+        ROUND_TIME_LIMIT = Math.max(1, Math.round(setting.roundTime / 1000));
+      }
       TURN_TIME_LIMIT = 5; // keep existing default for turn limit
       setRoundTime(ROUND_TIME_LIMIT);
       setTurnTime(TURN_TIME_LIMIT);
+      // clear chat history and show start notice
+      try { clearMessagesAndShowStartNotice(); } catch (e) {}
       setChatInput('');
       setIsPaused(true);
       setInputVisible(false);
@@ -189,8 +240,11 @@ export const useGameLogic = () => {
       setWord('게임이 곧 시작됩니다');
 
       try {
-        let temps:number;
+        let temps:number | undefined;
+        // start the audio-start sequence; if the sound callbacks never fire
+        // (or fail), a fallback timeout below will ensure the game actually starts.
         soundManager.playWithEnd('game_start', () => {
+          if (startTimeoutRef.current) { clearTimeout(startTimeoutRef.current); startTimeoutRef.current = null; }
           // call gameManager.gameStart to select start char (and mission)
           try {
             const startState = gameManager.gameStart();
@@ -205,7 +259,7 @@ export const useGameLogic = () => {
                 roundTime: ROUND_TIME_LIMIT,
                 speed: startState.turnSpeed
               });
-              temps=startState.turnSpeed
+              temps = startState.turnSpeed;
             }
           } catch (e) {}
 
@@ -215,22 +269,57 @@ export const useGameLogic = () => {
             cycleStarted = true;
             soundManager.playWithEnd('round_start', () => {
               setIsGameStarted(true);
+              setIsStarting(false);
               setIsPaused(false);
               setInputVisible(true);
-              try { 
-                soundManager.play(`T${temps}`); 
+              try {
+                if (typeof temps !== 'undefined') playBGMForSpeed(temps);
               } catch (e) {}
             });
           } catch (e) {
             setIsGameStarted(true);
             setIsPaused(false);
             setInputVisible(true);
-            try { soundManager.play(`T${temps}`); } catch (e) {}
+            try { if (typeof temps !== 'undefined') playBGMForSpeed(temps); } catch (e) {}
             if (!cycleStarted) startNewCycle();
           }
         });
+
+        // fallback: if audio callback never runs, force-start the game after 3s
+        if (startTimeoutRef.current) {
+          clearTimeout(startTimeoutRef.current);
+          startTimeoutRef.current = null;
+        }
+        startTimeoutRef.current = setTimeout(() => {
+          try {
+            const startState = gameManager.gameStart();
+            if (startState) {
+              setCurrentChar(startState.startChar);
+              setWord(startState.startChar);
+              if (startState.missionChar) setMissionChar(startState.missionChar);
+              else setMissionChar("");
+              TURN_TIME_LIMIT = startState.turnTime / 1000;
+              setLastState({
+                turnTime: startState.turnTime,
+                roundTime: ROUND_TIME_LIMIT,
+                speed: startState.turnSpeed
+              });
+              temps = startState.turnSpeed;
+            }
+          } catch (e) {}
+          try {
+            startNewCycle();
+            setIsGameStarted(true);
+            setIsStarting(false);
+            setIsPaused(false);
+            setInputVisible(true);
+            try { if (typeof temps !== 'undefined') playBGMForSpeed(temps); } catch (e) {}
+          } catch (e) {}
+          if (startTimeoutRef.current) { clearTimeout(startTimeoutRef.current); startTimeoutRef.current = null; }
+        }, 3000);
       } catch (e) {
         setIsGameStarted(true);
+        setIsStarting(false);
         setIsPaused(false);
         startNewCycle();
       }
@@ -262,16 +351,17 @@ export const useGameLogic = () => {
       setChatInput('');
 
       // submit to gameManager for validation and next state
-      const submitRes = gameManager.submitWord(input, Math.round(roundTime * 1000));
+      const remainingMs = roundTime === Infinity ? 0 : Math.round(roundTime * 1000);
+      const submitRes = gameManager.submitWord(input, remainingMs);
       if (!submitRes.ok) {
         // failed by gameManager rules
-        setWord(input);
+        setWord(`${input}${submitRes.reason ? ": "+submitRes.reason : ""}`);
         setIsFail(true);
         setChatInput('');
         try { soundManager.play('fail'); } catch (e) {}
         setTimeout(() => {
           setIsFail(false);
-          setWord(currentChar);
+          if (!hintVisible) { setWord(currentChar); }
         }, 2000);
         return;
       }
@@ -296,7 +386,7 @@ export const useGameLogic = () => {
       if (wordLength <= 8 && BEAT[wordLength]) {
         const beatPattern = BEAT[wordLength];
         if (lastState === null) return;
-        try { soundManager.stop(`T${lastState.speed}`); } catch (e) {}
+        try { stopBGMForSpeed(lastState.speed); } catch (e) {}
         setWord(input);
         setAnimatingWord(input);
         const initialVisible = new Array(wordLength).fill(false);
@@ -304,7 +394,8 @@ export const useGameLogic = () => {
         
         let beatIndex = 0;
         if (lastState === null) return;
-        const intervalTime = Math.max(10, Math.floor(lastState.turnTime / 96));
+        const safeTurnTime = isFinite(lastState.turnTime) ? lastState.turnTime : 15000;
+        const intervalTime = Math.max(10, Math.floor(safeTurnTime / 96));
         
         for (let i = 0; i < beatPattern.length; i++) {
           if (beatPattern[i] === '1') {
@@ -336,7 +427,8 @@ export const useGameLogic = () => {
 
           const runPulse = (repeats = 3) => {
             if (lastState === null) return 0;
-            const blinkTick = Math.max(10, Math.floor(lastState.turnTime / 96));
+            const safeBlinkSource = isFinite(lastState.turnTime) ? lastState.turnTime : 15000;
+            const blinkTick = Math.max(10, Math.floor(safeBlinkSource / 96));
             let total = 0;
             for (let r = 0; r < repeats; r++) {
               const on = setTimeout(() => setPulseOn(true), total);
@@ -356,7 +448,7 @@ export const useGameLogic = () => {
               setMissionChar(submitRes.nextMissionChar);
             }
             setIsPaused(false);
-            try { soundManager.play(`T${submitRes.turnSpeed}`); } catch (e) {}
+            try { playBGMForSpeed(submitRes.turnSpeed); } catch (e) {}
             if (typeof submitRes !== 'undefined' && submitRes && submitRes.nextChar) {
               setCurrentChar(submitRes.nextChar);
               if (submitRes.nextMissionChar) setMissionChar(submitRes.nextMissionChar);
@@ -372,14 +464,15 @@ export const useGameLogic = () => {
         beatTimeoutRefs.current.push(finalTimeout);
       } else if (wordLength >= 9) {
         if (lastState === null) return;
-        try { soundManager.stop(`T${lastState.speed}`); } catch (e) {}
+        try { stopBGMForSpeed(lastState.speed); } catch (e) {}
         setWord(input);
         setAnimatingWord(input);
         const initialVisible = new Array(wordLength).fill(false);
         setVisibleChars(initialVisible);
         
         if (lastState === null) return;
-        const intervalTime = Math.max(10, Math.floor(lastState.turnTime / 12 / wordLength));
+        const safeTurnTime2 = isFinite(lastState.turnTime) ? lastState.turnTime : 15000;
+        const intervalTime = Math.max(10, Math.floor(safeTurnTime2 / 12 / wordLength));
         
         for (let i = 0; i < wordLength; i++) {
           const timeout = setTimeout(() => {
@@ -401,7 +494,8 @@ export const useGameLogic = () => {
           try { soundManager.play(`K${lastState.speed}`); } catch(e) {}
           const runPulse = (repeats = 2) => {
             if (lastState === null) return 0;
-            const blinkTick = Math.max(10, Math.floor(lastState.turnTime / 46));
+            const safeBlinkSource2 = isFinite(lastState.turnTime) ? lastState.turnTime : 15000;
+            const blinkTick = Math.max(10, Math.floor(safeBlinkSource2 / 46));
             let total = 0;
             for (let r = 0; r < repeats; r++) {
               const on = setTimeout(() => setPulseOn(true), total);
@@ -421,7 +515,7 @@ export const useGameLogic = () => {
               setMissionChar(submitRes.nextMissionChar);
             }
             setIsPaused(false);
-            try { soundManager.play(`T${submitRes.turnSpeed}`); } catch (e) {}
+            try { playBGMForSpeed(submitRes.turnSpeed); } catch (e) {}
             if (typeof submitRes !== 'undefined' && submitRes && submitRes.nextChar) {
               setCurrentChar(submitRes.nextChar);
               if (submitRes.nextMissionChar) setMissionChar(submitRes.nextMissionChar);
@@ -443,7 +537,7 @@ export const useGameLogic = () => {
             setMissionChar(submitRes.nextMissionChar);
           }
           setIsPaused(false);
-          try { soundManager.play(`T${submitRes.turnSpeed}`); } catch (e) {}
+          try { playBGMForSpeed(submitRes.turnSpeed); } catch (e) {}
           if (typeof submitRes !== 'undefined' && submitRes && submitRes.nextChar) {
             setCurrentChar(submitRes.nextChar);
             if (submitRes.nextMissionChar) setMissionChar(submitRes.nextMissionChar);
@@ -467,7 +561,7 @@ export const useGameLogic = () => {
       try { soundManager.play('fail'); } catch (e) {}
       failTimeoutRef.current = setTimeout(() => {
         setIsFail(false);
-        setWord(currentChar);
+        if (!hintVisible) { setWord(currentChar); }
         failTimeoutRef.current = null;
       }, 2000);
     }
@@ -477,7 +571,11 @@ export const useGameLogic = () => {
   useEffect(() => {
     // update local time limits from setting
     const s = gameManager.getSetting();
-    ROUND_TIME_LIMIT = Math.max(1, Math.round(s.roundTime / 1000));
+    if (s.roundTime === 0) {
+      ROUND_TIME_LIMIT = Infinity;
+    } else {
+      ROUND_TIME_LIMIT = Math.max(1, Math.round(s.roundTime / 1000));
+    }
     setRoundTime(ROUND_TIME_LIMIT);
     setTurnTime(TURN_TIME_LIMIT);
   }, []);
@@ -528,6 +626,8 @@ export const useGameLogic = () => {
     handleInput,
     TURN_TIME_LIMIT,
     ROUND_TIME_LIMIT,
-    hintVisible
+    hintVisible,
+    gameResult,
+    closeGameResult: () => setGameResult(null)
   };
 };
