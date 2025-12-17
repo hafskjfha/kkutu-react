@@ -1,4 +1,4 @@
-import { KOREAN_CHARS, ENGLISH_CHARS } from '../const';
+import { KOREAN_CHARS, ENGLISH_CHARS, englishRegex, koreanRegex } from '../const';
 import { duemLaw } from './lib';
 import { disassemble } from 'es-hangul';
 import type { GameSetting } from '../types/game.type';
@@ -69,10 +69,30 @@ class GameManager {
         return `${startChar}|${missionChar}`;
     }
 
+    public canGameStart(): boolean {
+        if (this.gameSetting.lang === 'ko') {
+            if (this.gameSetting.mode === 'normal') {
+                return this.NormalStartCharSet.size > 0;
+            } else if (this.gameSetting.mode === 'mission') {
+                return this.MissionStartCharSet.size > 0;
+            } else {
+                return false;
+            }
+        } else if (this.gameSetting.lang === 'en') {
+            if (this.gameSetting.mode === 'normal') {
+                return this.NormalEngStartCharSet.size > 0;
+            } else if (this.gameSetting.mode === 'mission') {
+                return this.MissionEngStartCharSet.size > 0;
+            } else {
+                return false;
+            }
+        }
+        return false;
+    }
+
     public loadWordDB(data: {word: string, theme: string[]}[], setting: Partial<GameSetting>) {
         const pattern = /[^a-zA-Z0-9가-힣ㄱ-ㅎ]/g;
-        const koreanRegex = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/;
-        const englishRegex = /[a-zA-Z]/;
+        
         this.wordDB = data.filter(entry => entry.word.replace(pattern, '').length > 1).map(entry => ({word: entry.word.replace(pattern, '').toLowerCase(), theme: entry.theme}));
         this.gameSetting = {...this.gameSetting, ...setting};
         this.wordSet = new Set(this.wordDB.map(entry => entry.word));
@@ -121,6 +141,178 @@ class GameManager {
                 }
             }
         }
+    }
+
+    public clearDB() {
+        this.wordDB = [];
+        this.wordSet.clear();
+        this.wordThemeDB.clear();
+        this.NormalStartCharSet.clear();
+        this.MissionStartCharSet.clear();
+        this.NormalEngStartCharSet.clear();
+        this.MissionEngStartCharSet.clear();
+        this.NormalWordMap.clear();
+        this.MissionWordMap.clear();
+        this.MissionEngWordMap.clear();
+        this.NormalEngWordMap.clear();
+    }
+
+    public addWordToDB(word: string, theme: string[]) {
+        const cleanWord = word.replace(/[^a-zA-Z0-9가-힣ㄱ-ㅎ]/g, '').toLowerCase();
+        if (cleanWord.length <= 1 || this.wordSet.has(cleanWord)) {
+            return false;
+        }
+        this.wordDB.push({word: cleanWord, theme});
+        this.wordSet.add(cleanWord);
+        this.wordThemeDB.set(cleanWord, theme);
+        if (koreanRegex.test(cleanWord.charAt(0))) {
+            this.NormalStartCharSet.add(cleanWord.charAt(0));
+            if (!this.NormalWordMap.has(cleanWord.charAt(0))) {
+                this.NormalWordMap.set(cleanWord.charAt(0), new Set());
+            }
+            this.NormalWordMap.get(cleanWord.charAt(0))?.add(cleanWord);
+            this.NormalStartCharSet.add(cleanWord.charAt(0));
+            for (const mchar of KOREAN_CHARS) {
+                if (cleanWord.includes(mchar)) {
+                    this.MissionStartCharSet.add([cleanWord.charAt(0), mchar]);
+                    const key = this.getMissionKey(cleanWord.charAt(0), mchar);
+                    if (!this.MissionWordMap.has(key)) {
+                        this.MissionWordMap.set(key, new Set());
+                    }
+                    this.MissionWordMap.get(key)?.add(cleanWord);
+                }
+            }
+        } else if (englishRegex.test(cleanWord.charAt(0))) {
+            this.NormalEngStartCharSet.add(cleanWord.charAt(0));
+            if (!this.NormalEngWordMap.has(cleanWord.charAt(0))) {
+                this.NormalEngWordMap.set(cleanWord.charAt(0), new Set());
+            }
+            this.NormalEngWordMap.get(cleanWord.charAt(0))?.add(cleanWord);
+            for (const mchar of ENGLISH_CHARS) {
+                if (cleanWord.includes(mchar)) {
+                    this.MissionEngStartCharSet.add([cleanWord.charAt(0), mchar]);
+                    const key = this.getMissionKey(cleanWord.charAt(0), mchar);
+                    if (!this.MissionEngWordMap.has(key)) {
+                        this.MissionEngWordMap.set(key, new Set());
+                    }
+                    this.MissionEngWordMap.get(key)?.add(cleanWord);
+                }
+            }
+        }
+        return true;
+    }
+
+    public editWordInDB(oldWord: string, newWord: string) {
+        const cleanOldWord = oldWord.replace(/[^a-zA-Z0-9가-힣ㄱ-ㅎ]/g, '').toLowerCase();
+        const cleanNewWord = newWord.replace(/[^a-zA-Z0-9가-힣ㄱ-ㅎ]/g, '').toLowerCase();
+        if (!this.wordSet.has(cleanOldWord) || cleanNewWord.length <= 1) {
+            return false;
+        }
+        const entryIndex = this.wordDB.findIndex(entry => entry.word === cleanOldWord);
+        if (entryIndex === -1) {
+            return false;
+        }
+        const theme = this.wordDB[entryIndex].theme;
+        this.wordDB[entryIndex].word = cleanNewWord;
+        this.wordSet.delete(cleanOldWord);
+        this.wordSet.add(cleanNewWord);
+        this.wordThemeDB.delete(cleanOldWord);
+        this.wordThemeDB.set(cleanNewWord, theme);
+
+        if (englishRegex.test(cleanNewWord.charAt(0))) {
+            this.NormalEngStartCharSet.add(cleanNewWord.charAt(0));
+            if (!this.NormalEngWordMap.has(cleanNewWord.charAt(0))) {
+                this.NormalEngWordMap.set(cleanNewWord.charAt(0), new Set());
+            }
+            this.NormalEngWordMap.get(cleanNewWord.charAt(0))?.add(cleanNewWord);
+        } else if (koreanRegex.test(cleanNewWord.charAt(0))) {
+            this.NormalStartCharSet.add(cleanNewWord.charAt(0));
+            if (!this.NormalWordMap.has(cleanNewWord.charAt(0))) {
+                this.NormalWordMap.set(cleanNewWord.charAt(0), new Set());
+            }
+            this.NormalWordMap.get(cleanNewWord.charAt(0))?.add(cleanNewWord);
+        }
+
+        if (koreanRegex.test(cleanOldWord.charAt(0))) {
+            this.NormalWordMap.get(cleanOldWord.charAt(0))?.delete(cleanOldWord);
+            if ((this.NormalWordMap.get(cleanOldWord.charAt(0)) ?? new Set()).size === 0) {
+                this.NormalStartCharSet.delete(cleanOldWord.charAt(0));
+            }
+        } else if (englishRegex.test(cleanOldWord.charAt(0))) {
+            this.NormalEngWordMap.get(cleanOldWord.charAt(0))?.delete(cleanOldWord);
+            if ((this.NormalEngWordMap.get(cleanOldWord.charAt(0)) ?? new Set()).size === 0) {
+                this.NormalEngStartCharSet.delete(cleanOldWord.charAt(0));
+            }
+        }
+        for (const mchar of KOREAN_CHARS) {
+            const key = this.getMissionKey(cleanOldWord.charAt(0), mchar);
+            this.MissionWordMap.get(key)?.delete(cleanOldWord);
+            if ((this.MissionWordMap.get(key) ?? new Set()).size === 0) {
+                this.MissionStartCharSet.delete([cleanOldWord.charAt(0), mchar]);
+            }
+
+            const key2 = this.getMissionKey(cleanNewWord.charAt(0), mchar);
+            if (cleanNewWord.includes(mchar)) {
+                this.MissionStartCharSet.add([cleanNewWord.charAt(0), mchar]);
+                if (!this.MissionWordMap.has(key2)) {
+                    this.MissionWordMap.set(key2, new Set());
+                }
+                this.MissionWordMap.get(key2)?.add(cleanNewWord);
+            }
+        }
+        for (const mchar of ENGLISH_CHARS) {
+            const key = this.getMissionKey(cleanOldWord.charAt(0), mchar);
+            this.MissionEngWordMap.get(key)?.delete(cleanOldWord);
+            if ((this.MissionEngWordMap.get(key) ?? new Set()).size === 0) {
+                this.MissionEngStartCharSet.delete([cleanOldWord.charAt(0), mchar]);
+            }
+
+            const key2 = this.getMissionKey(cleanNewWord.charAt(0), mchar);
+            if (cleanNewWord.includes(mchar)) {
+                this.MissionEngStartCharSet.add([cleanNewWord.charAt(0), mchar]);
+                if (!this.MissionEngWordMap.has(key2)) {
+                    this.MissionEngWordMap.set(key2, new Set());
+                }
+                this.MissionEngWordMap.get(key2)?.add(cleanNewWord);
+            }
+        }
+        return true;
+    }
+
+    public deleteWordFromDB(word: string) {
+        const cleanWord = word.replace(/[^a-zA-Z0-9가-힣ㄱ-ㅎ]/g, '').toLowerCase();
+        if (!this.wordSet.has(cleanWord)) {
+            return false;
+        }
+        this.wordDB = this.wordDB.filter(entry => entry.word !== cleanWord);
+        this.wordSet.delete(cleanWord);
+        this.wordThemeDB.delete(cleanWord);
+        if (koreanRegex.test(cleanWord.charAt(0))) {
+            this.NormalWordMap.get(cleanWord.charAt(0))?.delete(cleanWord);
+            if ((this.NormalWordMap.get(cleanWord.charAt(0)) ?? new Set()).size === 0) {
+                this.NormalStartCharSet.delete(cleanWord.charAt(0));
+            }
+        } else if (englishRegex.test(cleanWord.charAt(0))) {
+            this.NormalEngWordMap.get(cleanWord.charAt(0))?.delete(cleanWord);
+            if ((this.NormalEngWordMap.get(cleanWord.charAt(0)) ?? new Set()).size === 0) {
+                this.NormalEngStartCharSet.delete(cleanWord.charAt(0));
+            }
+        }
+        for (const mchar of KOREAN_CHARS) {
+            const key = this.getMissionKey(cleanWord.charAt(0), mchar);
+            this.MissionWordMap.get(key)?.delete(cleanWord);
+            if ((this.MissionWordMap.get(key) ?? new Set()).size === 0) {
+                this.MissionStartCharSet.delete([cleanWord.charAt(0), mchar]);
+            }
+        }
+        for (const mchar of ENGLISH_CHARS) {
+            const key = this.getMissionKey(cleanWord.charAt(0), mchar);
+            this.MissionEngWordMap.get(key)?.delete(cleanWord);
+            if ((this.MissionEngWordMap.get(key) ?? new Set()).size === 0) {
+                this.MissionEngStartCharSet.delete([cleanWord.charAt(0), mchar]);
+            }
+        }
+        return true;
     }
 
     public isValidWord(word: string): boolean {
@@ -172,8 +364,8 @@ class GameManager {
                         this.nowState = {startChar, missionChar: null};
                     }
                 }
-                const randomIndex = Math.floor(Math.random() * this.NormalStartCharSet.intersection(this.gameSetting.wantStartChar).size);
-                this.nowState = {startChar: Array.from(this.NormalStartCharSet.intersection(this.gameSetting.wantStartChar))[randomIndex], missionChar: null};
+                const randomIndex = Math.floor(Math.random() * this.NormalStartCharSet.size);
+                this.nowState = {startChar: Array.from(this.NormalStartCharSet)[randomIndex], missionChar: null};
             }
             else if (this.gameSetting.mode === 'mission') {
                 if (this.gameSetting.notAgainSameChar && exclusion.size > 0) {
@@ -184,8 +376,8 @@ class GameManager {
                         this.nowState = {startChar, missionChar};
                     }
                 }
-                const randomIndex = Math.floor(Math.random() * [...this.MissionStartCharSet].filter(pair => this.gameSetting.wantStartChar.has(pair[0])).length);
-                const [startChar, missionChar] = Array.from([...this.MissionStartCharSet].filter(pair => this.gameSetting.wantStartChar.has(pair[0])))[randomIndex];
+                const randomIndex = Math.floor(Math.random() * this.MissionStartCharSet.size);
+                const [startChar, missionChar] = Array.from(this.MissionStartCharSet)[randomIndex];
                 this.nowState = {startChar, missionChar};
             } else {
                 this.nowState = {startChar: '', missionChar: null};
@@ -346,7 +538,7 @@ class GameManager {
         if (this.hintStack === 0) {
             this.hintWord = this.getHint();
         }
-        console.log('Hint word:', this.hintWord);
+
         let currentHint = '';
         const wordLength = this.hintWord.length;
 

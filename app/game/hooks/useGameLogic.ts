@@ -208,11 +208,20 @@ export const useGameLogic = () => {
    */
   const handleInput = (input: string) => {
     if (input === '/시작') {
-      // prevent starting a new game while one is already active or already starting
+        // prevent starting a new game while one is already active or already starting
       if (isGameStarted || isStarting) {
         try { setChatInput(''); } catch (e) {}
         return;
       }
+        // if game cannot start (no valid start chars etc.), show modal and abort
+        try {
+          if (!gameManager.canGameStart()) {
+            try { setChatInput(''); } catch (e) {}
+            // set zustand store flag so UI can display modal
+            try { useGameState.setState({ startBlocked: true, startBlockedMessage: '게임을 시작할 수 없습니다.' }); } catch (e) {}
+            return;
+          }
+        } catch (e) {}
       // mark that a start sequence is in progress so aliases cannot re-trigger it
       setIsStarting(true);
       // 게임 결과 다이얼로그 닫기

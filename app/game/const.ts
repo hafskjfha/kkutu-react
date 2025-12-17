@@ -12,3 +12,6 @@ export const BEAT = [
   "11011111",
   "11111111"
 ];
+
+export const koreanRegex = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/;
+export const englishRegex = /[a-zA-Z]/;

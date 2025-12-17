@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getAllWords, searchWordsByPrefix, updateWord, deleteWord, addWord } from '../lib/wordDB';
+import gameManager from '../lib/gameManager';
+import ConfirmModal from './ConfirmModal';
 
 interface WordManagerModalProps {
   onClose: () => void;
@@ -20,6 +22,8 @@ const WordManagerModal: React.FC<WordManagerModalProps> = ({ onClose }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [addError, setAddError] = useState('');
   const [editError, setEditError] = useState('');
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
   const parentRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -60,6 +64,7 @@ const WordManagerModal: React.FC<WordManagerModalProps> = ({ onClose }) => {
     if (sanitized && sanitized !== oldWord) {
       try {
         await updateWord(oldWord, sanitized);
+        gameManager.editWordInDB(oldWord, sanitized);
         await loadWords();
       } catch (error) {
         setEditError('단어 수정 중 오류가 발생했습니다.');
@@ -74,10 +79,22 @@ const WordManagerModal: React.FC<WordManagerModalProps> = ({ onClose }) => {
     setEditValue('');
   };
 
-  const handleDelete = async (word: string) => {
-    if (confirm(`"${word}"를 삭제하시겠습니까?`)) {
+  const handleDelete = (word: string) => {
+    setConfirmTarget(word);
+    setConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    const word = confirmTarget;
+    setConfirmOpen(false);
+    setConfirmTarget(null);
+    if (!word) return;
+    try {
       await deleteWord(word);
+      gameManager.deleteWordFromDB(word);
       await loadWords();
+    } catch (e) {
+      // ignore
     }
   };
 
@@ -92,6 +109,7 @@ const WordManagerModal: React.FC<WordManagerModalProps> = ({ onClose }) => {
     setAddError('');
     try {
       await addWord(sanitized);
+      gameManager.addWordToDB(sanitized, ['자유']);
       setNewWord('');
       await loadWords();
     } catch (error) {
@@ -116,7 +134,7 @@ const WordManagerModal: React.FC<WordManagerModalProps> = ({ onClose }) => {
 
   return (
     <div 
-      className="fixed inset-0 backdrop-blur-md bg-white/30 dark:bg-black/30 flex items-center justify-center z-50"
+      className="fixed inset-0 backdrop-blur-md bg-white/30 dark:bg-black/30 flex items-center justify-center z-49"
       onClick={onClose}
     >
       <div 
@@ -279,8 +297,17 @@ const WordManagerModal: React.FC<WordManagerModalProps> = ({ onClose }) => {
           </button>
         </div>
       </div>
+      {confirmOpen && (
+        <ConfirmModal
+          message={`"${confirmTarget}"를 삭제하시겠습니까?`}
+          onConfirm={handleConfirmDelete}
+          onCancel={() => { setConfirmOpen(false); setConfirmTarget(null); }}
+        />
+      )}
     </div>
   );
 };
 
 export default WordManagerModal;
+
+    // Confirm modal rendering moved below export (rendered by parent scope above)

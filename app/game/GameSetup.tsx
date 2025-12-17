@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { loadWordsFromFile, hasWords, getAllWords, clearAllWords } from './lib/wordDB';
 import WordManagerModal from './components/WordManagerModal';
+import ConfirmModal from './components/ConfirmModal';
 import StartCharModal from './components/StartCharModal';
 import gameManager from './lib/gameManager';
 import { stopAllSounds } from './lib/sound';
@@ -16,6 +17,7 @@ const GameSetup: React.FC = () => {
   const [message, setMessage] = useState<string>('');
   const [wordCount, setWordCount] = useState<number>(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [isStartCharModalOpen, setIsStartCharModalOpen] = useState(false);
   const [startCharInput, setStartCharInput] = useState<string>('');
   const [localSetting, setLocalSetting] = useState<{
@@ -185,10 +187,18 @@ const GameSetup: React.FC = () => {
   };
 
   const handleClearWords = async () => {
-    if (confirm('모든 단어를 삭제하시겠습니까?')) {
+    setConfirmOpen(true);
+  };
+
+  const performClearWords = async () => {
+    setConfirmOpen(false);
+    try {
       await clearAllWords();
+      gameManager.clearDB();
       setWordCount(0);
       setMessage('모든 단어가 삭제되었습니다.');
+    } catch (e) {
+      // ignore
     }
   };
 
@@ -221,12 +231,10 @@ const GameSetup: React.FC = () => {
 
             {message && (<div className={`p-3 rounded-lg mb-4 ${message.includes('오류') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>{message}</div>)}
 
-            {wordCount > 0 && (
               <div className="flex gap-3">
                 <button onClick={() => setIsModalOpen(true)} className="bg-purple-500 text-white px-6 py-2 rounded-lg hover:bg-purple-600 transition-colors">단어 목록 조회 ({wordCount}개)</button>
-                <button onClick={handleClearWords} className="bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-600 transition-colors">모든 단어 삭제</button>
+                {wordCount > 0 && <button onClick={handleClearWords} className="bg-red-500 text-white px-6 py-2 rounded-lg hover:bg-red-600 transition-colors">모든 단어 삭제</button>}
               </div>
-            )}
           </div>
 
           {/* 게임 설정 (오른쪽) */}
@@ -318,7 +326,7 @@ const GameSetup: React.FC = () => {
                         checked={(localSetting?.hintMode ?? 'special') === 'auto'}
                         onChange={() => handleSettingChange({ hintMode: 'auto' })}
                       />
-                      <span className="text-sm text-gray-700">자동 힌트</span>
+                      <span className="text-sm text-gray-700">랜덤 힌트</span>
                     </label>
                   </div>
                 </div>
@@ -350,6 +358,14 @@ const GameSetup: React.FC = () => {
             setIsModalOpen(false);
             checkExistingWords(); // 모달 닫을 때 단어 수 업데이트
           }} 
+        />
+      )}
+
+      {confirmOpen && (
+        <ConfirmModal
+          message={"모든 단어를 삭제하시겠습니까?"}
+          onConfirm={performClearWords}
+          onCancel={() => setConfirmOpen(false)}
         />
       )}
 

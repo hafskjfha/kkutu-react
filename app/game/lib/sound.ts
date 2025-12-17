@@ -122,6 +122,20 @@ class SoundManager {
     public setVolume(soundName: string, volume: number) {
         this.sounds[soundName]?.volume(volume);
     }
+
+    /**
+     * 모든 사운드의 볼륨을 일괄 설정합니다.
+     * @param volume 0.0 ~ 1.0
+     */
+    public setAllVolume(volume: number) {
+        try {
+            Object.values(this.sounds).forEach((s: any) => {
+                try { s.volume(volume); } catch (e) {}
+            });
+        } catch (e) {
+            // 무시
+        }
+    }
 }
 
 export const soundManager = new SoundManager();

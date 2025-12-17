@@ -46,9 +46,9 @@ export async function loadWordsFromFile(file: File): Promise<number> {
   if (!file.name.endsWith('.txt')) {
     throw new Error('txt 파일만 업로드 가능합니다.');
   }
-
+  const pattern = /[^a-zA-Z0-9가-힣ㄱ-ㅎ]/g;
   const text = await file.text();
-  const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  const lines = text.split('\n').map(line => line.replace(pattern, '').toLowerCase()).filter(line => line.length > 1);
 
   const db = await initDB();
   const tx = db.transaction(STORE_NAME, 'readwrite');
