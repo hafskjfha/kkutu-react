@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.13.13",
     "es-hangul": "^2.3.8",
     "howler": "^2.2.4",
     "idb": "^8.0.3",

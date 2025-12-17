@@ -2,7 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { loadWordsFromFile, hasWords, getAllWords, clearAllWords } from './lib/wordDB';
 import WordManagerModal from './components/WordManagerModal';
+import StartCharModal from './components/StartCharModal';
 import gameManager from './lib/gameManager';
+import { stopAllSounds } from './lib/sound';
 
 /**
  * 게임 시작 전 준비 화면 컴포넌트
@@ -14,18 +16,22 @@ const GameSetup: React.FC = () => {
   const [message, setMessage] = useState<string>('');
   const [wordCount, setWordCount] = useState<number>(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isStartCharModalOpen, setIsStartCharModalOpen] = useState(false);
+  const [startCharInput, setStartCharInput] = useState<string>('');
   const [localSetting, setLocalSetting] = useState<{
     roundTimeSeconds: number;
     notAgainSameChar: boolean;
     hintMode: 'special' | 'auto';
     lang: 'ko' | 'en';
     mode: 'normal' | 'mission';
+    startChars?: string;
   } | null>(null);
 
   // 컴포넌트 마운트 시 저장된 단어와 설정을 불러옴
   useEffect(() => {
     checkExistingWords();
     loadLocalSetting();
+    stopAllSounds();
   }, []);
 
   const loadLocalSetting = () => {
@@ -39,21 +45,29 @@ const GameSetup: React.FC = () => {
           lang: parsed.lang ?? gameManager.getSetting().lang,
           mode: parsed.mode ?? gameManager.getSetting().mode,
           hintMode: parsed.hintMode ?? gameManager.getSetting().hintMode,
+          startChars: parsed.startChars ?? Array.from(gameManager.getSetting().wantStartChar).join('')
         };
         setLocalSetting(merged);
+        setStartCharInput(merged.startChars);
         gameManager.updateSetting({
           roundTime: merged.roundTimeSeconds * 1000,
           notAgainSameChar: merged.notAgainSameChar,
           lang: merged.lang,
           mode: merged.mode,
+          hintMode: merged.hintMode,
+          wantStartChar: new Set((merged.startChars || '').split(''))
         });
       } else {
         const cur = gameManager.getSetting();
-        setLocalSetting({ roundTimeSeconds: Math.round(cur.roundTime / 1000), notAgainSameChar: cur.notAgainSameChar, lang: cur.lang, mode: cur.mode, hintMode: cur.hintMode });
+        const startCharsStr = Array.from(cur.wantStartChar).join('');
+        setLocalSetting({ roundTimeSeconds: Math.round(cur.roundTime / 1000), notAgainSameChar: cur.notAgainSameChar, lang: cur.lang, mode: cur.mode, hintMode: cur.hintMode, startChars: startCharsStr });
+        setStartCharInput(startCharsStr);
       }
     } catch (e) {
       const cur = gameManager.getSetting();
-      setLocalSetting({ roundTimeSeconds: Math.round(cur.roundTime / 1000), notAgainSameChar: cur.notAgainSameChar, lang: cur.lang, mode: cur.mode, hintMode: cur.hintMode });
+      const startCharsStr = Array.from(cur.wantStartChar).join('');
+      setLocalSetting({ roundTimeSeconds: Math.round(cur.roundTime / 1000), notAgainSameChar: cur.notAgainSameChar, lang: cur.lang, mode: cur.mode, hintMode: cur.hintMode, startChars: startCharsStr });
+      setStartCharInput(startCharsStr);
     }
   };
   const handleSettingChange = async (partial: Partial<{roundTimeSeconds: number; notAgainSameChar: boolean; lang: 'ko'|'en'; mode: 'normal'|'mission'; hintMode: 'special' | 'auto'}>) => {
@@ -64,6 +78,7 @@ const GameSetup: React.FC = () => {
       lang: partial.lang ?? localSetting?.lang ?? cur.lang,
       mode: partial.mode ?? localSetting?.mode ?? cur.mode,
       hintMode: partial.hintMode ?? localSetting?.hintMode ?? cur.hintMode,
+      startChars: localSetting?.startChars ?? Array.from(cur.wantStartChar).join('')
     };
     setLocalSetting(merged);
     gameManager.updateSetting({ roundTime: merged.roundTimeSeconds * 1000, notAgainSameChar: merged.notAgainSameChar, lang: merged.lang, mode: merged.mode, hintMode: merged.hintMode });
@@ -84,6 +99,33 @@ const GameSetup: React.FC = () => {
     } catch (e) {
       // ignore
     }
+  };
+
+  const openStartCharModal = () => {
+    setStartCharInput(localSetting?.startChars ?? Array.from(gameManager.getSetting().wantStartChar).join(''));
+    setIsStartCharModalOpen(true);
+  };
+
+  const saveStartChars = async () => {
+    const cleaned = (startCharInput || '').replace(/\s+/g, '');
+    const chars = cleaned.split('').filter(c => c !== '');
+    const merged = {...localSetting, startChars: cleaned};
+    setLocalSetting(merged as any);
+    gameManager.updateSetting({wantStartChar: new Set(chars)});
+    try {
+      localStorage.setItem('kkutu_game_setting', JSON.stringify({...merged}));
+    } catch (e) {}
+
+    try {
+      const exists = await hasWords();
+      if (exists) {
+        const words = await getAllWords();
+        gameManager.loadWordDB(words.map(({word,theme}) => ({word, theme: theme.split(',')})), gameManager.getSetting());
+        setWordCount(words.length);
+      }
+    } catch (e) {}
+
+    setIsStartCharModalOpen(false);
   };
 
   const checkExistingWords = async () => {
@@ -152,7 +194,7 @@ const GameSetup: React.FC = () => {
 
   return (
     <>
-      <div className="game-setup-container bg-white h-[410px] p-2 rounded-lg shadow-lg w-[1000px]  mt-10">
+      <div className="game-setup-container bg-white h-[410px] p-2 rounded-lg shadow-lg w-[1000px] mt-5">
 
         {/* 단어 로드 및 게임 설정을 가로로 배치 */}
         <div className="mb-4 flex gap-6 flex-col md:flex-row">
@@ -188,7 +230,7 @@ const GameSetup: React.FC = () => {
           </div>
 
           {/* 게임 설정 (오른쪽) */}
-          <div className="w-[320px] p-4 rounded-lg bg-gray-50">
+          <div className="w-[320px] p-4 rounded-lg bg-gray-50 max-h-[320px] overflow-auto">
             <h2 className="text-xl font-semibold mb-4 text-gray-700">게임 설정</h2>
             <div className="space-y-3">
               <div>
@@ -288,6 +330,13 @@ const GameSetup: React.FC = () => {
                   <span className="text-sm text-gray-700">이전에 나온글자 미표시</span>
                 </label>
               </div>
+              <div>
+                <label className="block text-sm text-gray-700 mb-2">제시어 설정</label>
+                <div className="flex items-center gap-3">
+                  <button onClick={openStartCharModal} className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors">제시어 설정</button>
+                  <span className="text-sm text-gray-700">선택됨: {(localSetting?.startChars ?? Array.from(gameManager.getSetting().wantStartChar).join('')).length}개</span>
+                </div>
+              </div>
               
             </div>
           </div>
@@ -303,6 +352,8 @@ const GameSetup: React.FC = () => {
           }} 
         />
       )}
+
+      <StartCharModal value={startCharInput} open={isStartCharModalOpen} onClose={() => setIsStartCharModalOpen(false)} onChange={setStartCharInput} onSave={saveStartChars} />
     </>
   );
 };

@@ -4,4 +4,5 @@ export type GameSetting = {
     hintMode: 'special' | 'auto';
     notAgainSameChar: boolean;
     roundTime: number; // ms
+    wantStartChar: Set<string>;
 }

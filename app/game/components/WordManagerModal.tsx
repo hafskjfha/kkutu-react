@@ -1,5 +1,6 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { getAllWords, searchWordsByPrefix, updateWord, deleteWord, addWord } from '../lib/wordDB';
 
 interface WordManagerModalProps {
@@ -17,6 +18,9 @@ const WordManagerModal: React.FC<WordManagerModalProps> = ({ onClose }) => {
   const [editValue, setEditValue] = useState('');
   const [newWord, setNewWord] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [addError, setAddError] = useState('');
+  const [editError, setEditError] = useState('');
+  const parentRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     loadWords();
@@ -45,12 +49,20 @@ const WordManagerModal: React.FC<WordManagerModalProps> = ({ onClose }) => {
   };
 
   const handleSaveEdit = async (oldWord: string) => {
-    if (editValue.trim() && editValue !== oldWord) {
+    const trimmed = editValue.trim();
+    const pattern = /[^a-zA-Z0-9가-힣ㄱ-ㅎ]/g;
+    const sanitized = trimmed.replace(pattern, '');
+    if (!trimmed || sanitized.length <= 1) {
+      setEditError('유효한 단어를 입력하세요. (특수문자 제거 후 길이 2 이상)');
+      return;
+    }
+    setEditError('');
+    if (sanitized && sanitized !== oldWord) {
       try {
-        await updateWord(oldWord, editValue.trim());
+        await updateWord(oldWord, sanitized);
         await loadWords();
       } catch (error) {
-        alert('단어 수정 중 오류가 발생했습니다.');
+        setEditError('단어 수정 중 오류가 발생했습니다.');
       }
     }
     setEditingWord(null);
@@ -70,17 +82,20 @@ const WordManagerModal: React.FC<WordManagerModalProps> = ({ onClose }) => {
   };
 
   const handleAddWord = async () => {
-    if (!newWord.trim()) {
-      alert('단어를 입력해주세요.');
+    const trimmed = newWord.trim();
+    const pattern = /[^a-zA-Z0-9가-힣ㄱ-ㅎ]/g;
+    const sanitized = trimmed.replace(pattern, '');
+    if (!trimmed || sanitized.length <= 1) {
+      setAddError('유효한 단어를 입력하세요. (특수문자 제거 후 길이 2 이상)');
       return;
     }
-
+    setAddError('');
     try {
-      await addWord(newWord.trim());
+      await addWord(sanitized);
       setNewWord('');
       await loadWords();
     } catch (error) {
-      alert('단어 추가 중 오류가 발생했습니다.');
+      setAddError('단어 추가 중 오류가 발생했습니다.');
     }
   };
 
@@ -91,9 +106,17 @@ const WordManagerModal: React.FC<WordManagerModalProps> = ({ onClose }) => {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  const rowHeight = 56;
+  const virtualizer = useVirtualizer({
+    count: words.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => rowHeight,
+    overscan: 5,
+  });
+
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      className="fixed inset-0 backdrop-blur-md bg-white/30 dark:bg-black/30 flex items-center justify-center z-50"
       onClick={onClose}
     >
       <div 
@@ -146,10 +169,13 @@ const WordManagerModal: React.FC<WordManagerModalProps> = ({ onClose }) => {
               추가
             </button>
           </div>
+          {addError && (
+            <div className="text-sm text-red-500 mt-2">{addError}</div>
+          )}
         </div>
 
         {/* 단어 목록 */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div ref={parentRef} className="flex-1 overflow-y-auto p-6">
           {isLoading ? (
             <div className="text-center text-gray-500 py-8">
               로딩 중...
@@ -163,68 +189,81 @@ const WordManagerModal: React.FC<WordManagerModalProps> = ({ onClose }) => {
               <div className="text-sm text-gray-600 mb-4">
                 총 {words.length}개의 단어
               </div>
-              <div className="space-y-2">
-                {words.map((item) => (
-                  <div
-                    key={item.word}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    {editingWord === item.word ? (
-                      <>
-                        <input
-                          type="text"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveEdit(item.word);
-                            if (e.key === 'Escape') handleCancelEdit();
-                          }}
-                          className="flex-1 px-3 py-1 border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          autoFocus
-                        />
-                        <div className="flex gap-2 ml-3">
-                          <button
-                            onClick={() => handleSaveEdit(item.word)}
-                            className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 text-sm"
-                          >
-                            저장
-                          </button>
-                          <button
-                            onClick={handleCancelEdit}
-                            className="bg-gray-500 text-white px-3 py-1 rounded hover:bg-gray-600 text-sm"
-                          >
-                            취소
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="flex-1">
-                          <span className="text-gray-800 font-medium">
-                            {item.word}
-                          </span>
-                          <span className="ml-3 text-sm text-gray-500">
-                            ({item.theme})
-                          </span>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleEdit(item.word)}
-                            className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 text-sm"
-                          >
-                            수정
-                          </button>
-                          <button
-                            onClick={() => handleDelete(item.word)}
-                            className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 text-sm"
-                          >
-                            삭제
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
+              <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+                {virtualizer.getVirtualItems().map((virtualRow) => {
+                  const item = words[virtualRow.index];
+                  return (
+                    <div
+                      key={item.word}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                    >
+                      {editingWord === item.word ? (
+                        <>
+                          <input
+                            type="text"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveEdit(item.word);
+                              if (e.key === 'Escape') handleCancelEdit();
+                            }}
+                            className="flex-1 px-3 py-1 border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            autoFocus
+                          />
+                          <div className="flex gap-2 ml-3">
+                            <button
+                              onClick={() => handleSaveEdit(item.word)}
+                              className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 text-sm"
+                            >
+                              저장
+                            </button>
+                            <button
+                              onClick={handleCancelEdit}
+                              className="bg-gray-500 text-white px-3 py-1 rounded hover:bg-gray-600 text-sm"
+                            >
+                              취소
+                            </button>
+                          </div>
+                          {editError && (
+                            <div className="text-sm text-red-500 mt-2">{editError}</div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex-1">
+                            <span className="text-gray-800 font-medium">
+                              {item.word}
+                            </span>
+                            <span className="ml-3 text-sm text-gray-500">
+                              ({item.theme})
+                            </span>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleEdit(item.word)}
+                              className="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 text-sm"
+                            >
+                              수정
+                            </button>
+                            <button
+                              onClick={() => handleDelete(item.word)}
+                              className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 text-sm"
+                            >
+                              삭제
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </>
           )}

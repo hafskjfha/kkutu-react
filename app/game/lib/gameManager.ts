@@ -35,7 +35,7 @@ class GameManager {
     private NormalEngWordMap: Map<string, Set<string>> = new Map();
     private MissionEngWordMap: Map<string, Set<string>> = new Map();
 
-    private gameSetting: GameSetting = {lang: 'ko', mode: 'normal', hintMode: 'auto', notAgainSameChar: false, roundTime: 60000};
+    private gameSetting: GameSetting = {lang: 'ko', mode: 'normal', hintMode: 'auto', notAgainSameChar: false, roundTime: 60000, wantStartChar: new Set()};
     private nowState: null | {startChar: string, missionChar: string | null} = null;
     private usedWords: {char: string, word: string, missionChar: string | null, useHintCount: number, isFailed?: boolean}[] = [];
     private exclusionSet: Set<string | [string, string]> = new Set();
@@ -121,7 +121,6 @@ class GameManager {
                 }
             }
         }
-        console.log(this.MissionEngWordMap)
     }
 
     public isValidWord(word: string): boolean {
@@ -166,27 +165,27 @@ class GameManager {
         if (this.gameSetting.lang === 'ko') {
             if (this.gameSetting.mode === 'normal') {
                 if (this.gameSetting.notAgainSameChar && exclusion.size > 0) {
-                    const availableChars = new Set([...this.NormalStartCharSet].filter(char => !(exclusion as Set<string>).has(char)));
+                    const availableChars = new Set([...this.NormalStartCharSet.intersection(this.gameSetting.wantStartChar)].filter(char => !(exclusion as Set<string>).has(char)));
                     if (availableChars.size !== 0) {
                         const randomIndex = Math.floor(Math.random() * availableChars.size);
                         const startChar = Array.from(availableChars)[randomIndex];
                         this.nowState = {startChar, missionChar: null};
                     }
                 }
-                const randomIndex = Math.floor(Math.random() * this.NormalStartCharSet.size);
-                this.nowState = {startChar: Array.from(this.NormalStartCharSet)[randomIndex], missionChar: null};
+                const randomIndex = Math.floor(Math.random() * this.NormalStartCharSet.intersection(this.gameSetting.wantStartChar).size);
+                this.nowState = {startChar: Array.from(this.NormalStartCharSet.intersection(this.gameSetting.wantStartChar))[randomIndex], missionChar: null};
             }
             else if (this.gameSetting.mode === 'mission') {
                 if (this.gameSetting.notAgainSameChar && exclusion.size > 0) {
-                    const availablePairs = new Set([...this.MissionStartCharSet].filter(pair => !(exclusion as Set<[string, string]>).has(pair)));
+                    const availablePairs = new Set([...this.MissionStartCharSet].filter(pair => !(exclusion as Set<[string, string]>).has(pair) && this.gameSetting.wantStartChar.has(pair[0])));
                     if (availablePairs.size !== 0) {
                         const randomIndex = Math.floor(Math.random() * availablePairs.size);
                         const [startChar, missionChar] = Array.from(availablePairs)[randomIndex];
                         this.nowState = {startChar, missionChar};
                     }
                 }
-                const randomIndex = Math.floor(Math.random() * this.MissionStartCharSet.size);
-                const [startChar, missionChar] = Array.from(this.MissionStartCharSet)[randomIndex];
+                const randomIndex = Math.floor(Math.random() * [...this.MissionStartCharSet].filter(pair => this.gameSetting.wantStartChar.has(pair[0])).length);
+                const [startChar, missionChar] = Array.from([...this.MissionStartCharSet].filter(pair => this.gameSetting.wantStartChar.has(pair[0])))[randomIndex];
                 this.nowState = {startChar, missionChar};
             } else {
                 this.nowState = {startChar: '', missionChar: null};

@@ -508,7 +508,7 @@ export const useGameLogic = () => {
             return total;
           };
 
-          const pulseDuration = runPulse(2);
+          const pulseDuration = runPulse();
           const cleanup = setTimeout(() => {
             setAnimatingWord(null);
             if (submitRes.nextMissionChar) {
