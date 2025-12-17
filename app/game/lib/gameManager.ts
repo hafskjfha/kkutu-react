@@ -1,13 +1,8 @@
-import { KOREAN_CHARS } from '../const';
+import { KOREAN_CHARS, ENGLISH_CHARS } from '../const';
 import { duemLaw } from './lib';
 import { disassemble } from 'es-hangul';
+import type { GameSetting } from '../types/game.type';
 
-type GameSetting = {
-    lang: 'ko' | 'en';
-    mode: 'normal' | 'mission';
-    notAgainSameChar: boolean;
-    roundTime: number; // ms
-}
 
 type SubminWordResult = {
     ok: false;
@@ -33,10 +28,14 @@ class GameManager {
     private wordSet: Set<string> = new Set();
     private NormalStartCharSet: Set<string> = new Set();
     private MissionStartCharSet: Set<[string, string]> = new Set();
+    private NormalEngStartCharSet: Set<string> = new Set();
+    private MissionEngStartCharSet: Set<[string, string]> = new Set();
     private NormalWordMap: Map<string, Set<string>> = new Map();
     private MissionWordMap: Map<string, Set<string>> = new Map();
+    private NormalEngWordMap: Map<string, Set<string>> = new Map();
+    private MissionEngWordMap: Map<string, Set<string>> = new Map();
 
-    private gameSetting: GameSetting = {lang: 'ko', mode: 'normal', notAgainSameChar: false, roundTime: 60000};
+    private gameSetting: GameSetting = {lang: 'ko', mode: 'normal', hintMode: 'auto', notAgainSameChar: false, roundTime: 60000};
     private nowState: null | {startChar: string, missionChar: string | null} = null;
     private usedWords: {char: string, word: string, missionChar: string | null, useHintCount: number, isFailed?: boolean}[] = [];
     private exclusionSet: Set<string | [string, string]> = new Set();
@@ -72,37 +71,57 @@ class GameManager {
 
     public loadWordDB(data: {word: string, theme: string[]}[], setting: Partial<GameSetting>) {
         const pattern = /[^a-zA-Z0-9가-힣ㄱ-ㅎ]/g;
-        this.wordDB = data.filter(entry => entry.word.replace(pattern, '').length > 1).map(entry => ({word: entry.word.replace(pattern, ''), theme: entry.theme}));
+        const koreanRegex = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/;
+        const englishRegex = /[a-zA-Z]/;
+        this.wordDB = data.filter(entry => entry.word.replace(pattern, '').length > 1).map(entry => ({word: entry.word.replace(pattern, '').toLowerCase(), theme: entry.theme}));
         this.gameSetting = {...this.gameSetting, ...setting};
         this.wordSet = new Set(this.wordDB.map(entry => entry.word));
         this.wordThemeDB = new Map(this.wordDB.map(entry => [entry.word, entry.theme]));
         
-        if (this.gameSetting.mode === 'normal') {
-            this.NormalStartCharSet = new Set(this.wordDB.map(entry => entry.word.charAt(0)));
-            this.NormalWordMap.clear();
-            for (const entry of this.wordDB) {
-                const startChar = entry.word.charAt(0);
+
+        this.NormalStartCharSet = new Set(this.wordDB.filter(entry => koreanRegex.test(entry.word.charAt(0))).map(entry => entry.word.charAt(0)));
+        this.NormalEngStartCharSet = new Set(this.wordDB.filter(entry => englishRegex.test(entry.word.charAt(0))).map(entry => entry.word.charAt(0)));
+        
+        this.NormalWordMap.clear();
+        for (const entry of this.wordDB) {
+            const startChar = entry.word.charAt(0);
+            if (koreanRegex.test(startChar)) {
                 if (!this.NormalWordMap.has(startChar)) {
                     this.NormalWordMap.set(startChar, new Set());
                 }
                 this.NormalWordMap.get(startChar)?.add(entry.word);
+            } else if (englishRegex.test(startChar)) {
+                if (!this.NormalEngWordMap.has(startChar)) {
+                    this.NormalEngWordMap.set(startChar, new Set());
+                }
+                this.NormalEngWordMap.get(startChar)?.add(entry.word);
             }
-        } else if (this.gameSetting.mode === 'mission') {
-            this.MissionStartCharSet.clear();
-            this.MissionWordMap.clear();
-            for (const entry of this.wordDB) {
-                for (const mchar of KOREAN_CHARS) {
-                    if (entry.word.includes(mchar)) {
-                        this.MissionStartCharSet.add([entry.word.charAt(0), mchar]);
-                        const key = this.getMissionKey(entry.word.charAt(0), mchar);
-                        if (!this.MissionWordMap.has(key)) {
-                            this.MissionWordMap.set(key, new Set());
-                        }
-                        this.MissionWordMap.get(key)?.add(entry.word);
+        }
+        this.MissionStartCharSet.clear();
+        this.MissionWordMap.clear();
+        for (const entry of this.wordDB) {
+            for (const mchar of KOREAN_CHARS) {
+                if (entry.word.includes(mchar)) {
+                    this.MissionStartCharSet.add([entry.word.charAt(0), mchar]);
+                    const key = this.getMissionKey(entry.word.charAt(0), mchar);
+                    if (!this.MissionWordMap.has(key)) {
+                        this.MissionWordMap.set(key, new Set());
                     }
+                    this.MissionWordMap.get(key)?.add(entry.word);
+                }
+            }
+            for (const mchar of ENGLISH_CHARS) {
+                if (entry.word.includes(mchar)) {
+                    this.MissionEngStartCharSet.add([entry.word.charAt(0), mchar]);
+                    const key = this.getMissionKey(entry.word.charAt(0), mchar);
+                    if (!this.MissionEngWordMap.has(key)) {
+                        this.MissionEngWordMap.set(key, new Set());
+                    }
+                    this.MissionEngWordMap.get(key)?.add(entry.word);
                 }
             }
         }
+        console.log(this.MissionEngWordMap)
     }
 
     public isValidWord(word: string): boolean {
@@ -144,30 +163,61 @@ class GameManager {
      * @returns - 선택된 시작 글자와 미션 글자
      */
     public getStartChar(exclusion: Set<string | [string, string]> = new Set()): {startChar: string, missionChar: string | null}  {
-        if (this.gameSetting.mode === 'normal') {
-            if (this.gameSetting.notAgainSameChar && exclusion.size > 0) {
-                const availableChars = new Set([...this.NormalStartCharSet].filter(char => !(exclusion as Set<string>).has(char)));
-                if (availableChars.size !== 0) {
-                    const randomIndex = Math.floor(Math.random() * availableChars.size);
-                    const startChar = Array.from(availableChars)[randomIndex];
-                    this.nowState = {startChar, missionChar: null};
+        if (this.gameSetting.lang === 'ko') {
+            if (this.gameSetting.mode === 'normal') {
+                if (this.gameSetting.notAgainSameChar && exclusion.size > 0) {
+                    const availableChars = new Set([...this.NormalStartCharSet].filter(char => !(exclusion as Set<string>).has(char)));
+                    if (availableChars.size !== 0) {
+                        const randomIndex = Math.floor(Math.random() * availableChars.size);
+                        const startChar = Array.from(availableChars)[randomIndex];
+                        this.nowState = {startChar, missionChar: null};
+                    }
                 }
+                const randomIndex = Math.floor(Math.random() * this.NormalStartCharSet.size);
+                this.nowState = {startChar: Array.from(this.NormalStartCharSet)[randomIndex], missionChar: null};
             }
-            const randomIndex = Math.floor(Math.random() * this.NormalStartCharSet.size);
-            this.nowState = {startChar: Array.from(this.NormalStartCharSet)[randomIndex], missionChar: null};
-        }
-        else if (this.gameSetting.mode === 'mission') {
-            if (this.gameSetting.notAgainSameChar && exclusion.size > 0) {
-                const availablePairs = new Set([...this.MissionStartCharSet].filter(pair => !(exclusion as Set<[string, string]>).has(pair)));
-                if (availablePairs.size !== 0) {
-                    const randomIndex = Math.floor(Math.random() * availablePairs.size);
-                    const [startChar, missionChar] = Array.from(availablePairs)[randomIndex];
-                    this.nowState = {startChar, missionChar};
+            else if (this.gameSetting.mode === 'mission') {
+                if (this.gameSetting.notAgainSameChar && exclusion.size > 0) {
+                    const availablePairs = new Set([...this.MissionStartCharSet].filter(pair => !(exclusion as Set<[string, string]>).has(pair)));
+                    if (availablePairs.size !== 0) {
+                        const randomIndex = Math.floor(Math.random() * availablePairs.size);
+                        const [startChar, missionChar] = Array.from(availablePairs)[randomIndex];
+                        this.nowState = {startChar, missionChar};
+                    }
                 }
+                const randomIndex = Math.floor(Math.random() * this.MissionStartCharSet.size);
+                const [startChar, missionChar] = Array.from(this.MissionStartCharSet)[randomIndex];
+                this.nowState = {startChar, missionChar};
+            } else {
+                this.nowState = {startChar: '', missionChar: null};
             }
-            const randomIndex = Math.floor(Math.random() * this.MissionStartCharSet.size);
-            const [startChar, missionChar] = Array.from(this.MissionStartCharSet)[randomIndex];
-            this.nowState = {startChar, missionChar};
+        } else if (this.gameSetting.lang === 'en') {
+            if (this.gameSetting.mode === 'normal') {
+                if (this.gameSetting.notAgainSameChar && exclusion.size > 0) {
+                    const availableChars = new Set([...this.NormalEngStartCharSet].filter(char => !(exclusion as Set<string>).has(char)));
+                    if (availableChars.size !== 0) {
+                        const randomIndex = Math.floor(Math.random() * availableChars.size);
+                        const startChar = Array.from(availableChars)[randomIndex];
+                        this.nowState = {startChar, missionChar: null};
+                    }
+                }
+                const randomIndex = Math.floor(Math.random() * this.NormalEngStartCharSet.size);
+                this.nowState = {startChar: Array.from(this.NormalEngStartCharSet)[randomIndex], missionChar: null};
+            } else if (this.gameSetting.mode === 'mission') {
+                if (this.gameSetting.notAgainSameChar && exclusion.size > 0) {
+                    const availablePairs = new Set([...this.MissionEngStartCharSet].filter(pair => !(exclusion as Set<[string, string]>).has(pair)));
+                    if (availablePairs.size !== 0) {
+                        const randomIndex = Math.floor(Math.random() * availablePairs.size);
+                        const [startChar, missionChar] = Array.from(availablePairs)[randomIndex];
+                        this.nowState = {startChar, missionChar};
+                    }
+                }
+                const randomIndex = Math.floor(Math.random() * this.MissionEngStartCharSet.size);
+                const [startChar, missionChar] = Array.from(this.MissionEngStartCharSet)[randomIndex];
+                this.nowState = {startChar, missionChar};
+            } else {
+                this.nowState = {startChar: '', missionChar: null};
+            }
         } else {
             this.nowState = {startChar: '', missionChar: null};
         }
@@ -235,25 +285,54 @@ class GameManager {
 
     public getHint(){
         if (this.nowState === null) return "";
-        if (this.gameSetting.mode === 'normal') {
-            const hintWords = Array.from(this.NormalWordMap.get(this.nowState.startChar) || []);
-            console.log('Hint words for', this.nowState.startChar, ':', hintWords);
-            if (hintWords.length > 0) {
-                const randomIndex = Math.floor(Math.random() * hintWords.length);
-                return `${hintWords[randomIndex]}`;
-            } else {
-                return "";
-            }
-        } else if (this.gameSetting.mode === 'mission') {
-            const hintWords = Array.from(this.MissionWordMap.get(this.getMissionKey(this.nowState.startChar, this.nowState.missionChar!)) || []);
-            if (hintWords.length > 0) {
-                const randomIndex = Math.floor(Math.random() * hintWords.length);
-                return `${hintWords[randomIndex]}`;
+        if (this.gameSetting.hintMode === 'auto') {
+            if (this.gameSetting.mode === 'normal') {
+                const hintWords = Array.from(this.NormalWordMap.get(this.nowState.startChar) || []);
+                console.log('Hint words for', this.nowState.startChar, ':', hintWords);
+                if (hintWords.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * hintWords.length);
+                    return `${hintWords[randomIndex]}`;
+                } else {
+                    return "";
+                }
+            } else if (this.gameSetting.mode === 'mission') {
+                const hintWords = Array.from(this.MissionWordMap.get(this.getMissionKey(this.nowState.startChar, this.nowState.missionChar!)) || []);
+                if (hintWords.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * hintWords.length);
+                    return `${hintWords[randomIndex]}`;
+                } else {
+                    return "";
+                }
             } else {
                 return "";
             }
         } else {
-            return "";
+            if (this.gameSetting.mode === 'normal') {
+                const hintWords = Array.from(this.NormalWordMap.get(this.nowState.startChar) || []);
+                if (hintWords.length > 0) {
+                    const longestWord = hintWords.reduce((a, b) => a.length >= b.length ? a : b, "");
+                    return `${longestWord}`;
+                } else {
+                    return "";
+                }
+            } else if (this.gameSetting.mode === 'mission') {
+                const hintWords = Array.from(this.MissionWordMap.get(this.getMissionKey(this.nowState.startChar, this.nowState.missionChar!)) || []);
+                if (hintWords.length > 0) {
+                    const manyIncludeWord = hintWords.reduce((a, b) => {
+                        const aCount = a.split(this.nowState!.missionChar!).length - 1;
+                        const bCount = b.split(this.nowState!.missionChar!).length - 1;
+                        if (aCount !== bCount) {
+                            return aCount >= bCount ? a : b;
+                        } else {
+                            return a.length >= b.length ? a : b;
+                        }
+                    }, "");
+                    return `${manyIncludeWord}`;
+                }
+                return "";
+            } else {
+                return "";
+            }
         }
     }
 

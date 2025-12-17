@@ -17,6 +17,7 @@ const GameSetup: React.FC = () => {
   const [localSetting, setLocalSetting] = useState<{
     roundTimeSeconds: number;
     notAgainSameChar: boolean;
+    hintMode: 'special' | 'auto';
     lang: 'ko' | 'en';
     mode: 'normal' | 'mission';
   } | null>(null);
@@ -37,6 +38,7 @@ const GameSetup: React.FC = () => {
           notAgainSameChar: parsed.notAgainSameChar ?? gameManager.getSetting().notAgainSameChar,
           lang: parsed.lang ?? gameManager.getSetting().lang,
           mode: parsed.mode ?? gameManager.getSetting().mode,
+          hintMode: parsed.hintMode ?? gameManager.getSetting().hintMode,
         };
         setLocalSetting(merged);
         gameManager.updateSetting({
@@ -47,23 +49,24 @@ const GameSetup: React.FC = () => {
         });
       } else {
         const cur = gameManager.getSetting();
-        setLocalSetting({ roundTimeSeconds: Math.round(cur.roundTime / 1000), notAgainSameChar: cur.notAgainSameChar, lang: cur.lang, mode: cur.mode });
+        setLocalSetting({ roundTimeSeconds: Math.round(cur.roundTime / 1000), notAgainSameChar: cur.notAgainSameChar, lang: cur.lang, mode: cur.mode, hintMode: cur.hintMode });
       }
     } catch (e) {
       const cur = gameManager.getSetting();
-      setLocalSetting({ roundTimeSeconds: Math.round(cur.roundTime / 1000), notAgainSameChar: cur.notAgainSameChar, lang: cur.lang, mode: cur.mode });
+      setLocalSetting({ roundTimeSeconds: Math.round(cur.roundTime / 1000), notAgainSameChar: cur.notAgainSameChar, lang: cur.lang, mode: cur.mode, hintMode: cur.hintMode });
     }
   };
-  const handleSettingChange = async (partial: Partial<{roundTimeSeconds: number; notAgainSameChar: boolean; lang: 'ko'|'en'; mode: 'normal'|'mission'}>) => {
+  const handleSettingChange = async (partial: Partial<{roundTimeSeconds: number; notAgainSameChar: boolean; lang: 'ko'|'en'; mode: 'normal'|'mission'; hintMode: 'special' | 'auto'}>) => {
     const cur = gameManager.getSetting();
     const merged = {
       roundTimeSeconds: partial.roundTimeSeconds ?? localSetting?.roundTimeSeconds ?? Math.round(cur.roundTime / 1000),
       notAgainSameChar: partial.notAgainSameChar ?? localSetting?.notAgainSameChar ?? cur.notAgainSameChar,
       lang: partial.lang ?? localSetting?.lang ?? cur.lang,
       mode: partial.mode ?? localSetting?.mode ?? cur.mode,
+      hintMode: partial.hintMode ?? localSetting?.hintMode ?? cur.hintMode,
     };
     setLocalSetting(merged);
-    gameManager.updateSetting({ roundTime: merged.roundTimeSeconds * 1000, notAgainSameChar: merged.notAgainSameChar, lang: merged.lang, mode: merged.mode });
+    gameManager.updateSetting({ roundTime: merged.roundTimeSeconds * 1000, notAgainSameChar: merged.notAgainSameChar, lang: merged.lang, mode: merged.mode, hintMode: merged.hintMode });
     try {
       localStorage.setItem('kkutu_game_setting', JSON.stringify(merged));
     } catch (e) {
@@ -203,18 +206,80 @@ const GameSetup: React.FC = () => {
 
               <div>
                 <label className="block text-sm text-gray-700 mb-2">언어</label>
-                <select value={localSetting?.lang ?? 'ko'} onChange={(e) => handleSettingChange({ lang: e.target.value as 'ko' | 'en' })} className="w-full px-3 py-2 border rounded-lg">
-                  <option value="ko">한국어</option>
-                  <option value="en">English</option>
-                </select>
+                <div className="flex gap-3">
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="lang"
+                      value="ko"
+                      checked={(localSetting?.lang ?? 'ko') === 'ko'}
+                      onChange={() => handleSettingChange({ lang: 'ko' })}
+                    />
+                    <span className="text-sm text-gray-700">한국어</span>
+                  </label>
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="lang"
+                      value="en"
+                      checked={(localSetting?.lang ?? 'ko') === 'en'}
+                      onChange={() => handleSettingChange({ lang: 'en' })}
+                    />
+                    <span className="text-sm text-gray-700">English</span>
+                  </label>
+                </div>
               </div>
 
               <div>
                 <label className="block text-sm text-gray-700 mb-2">모드</label>
-                <select value={localSetting?.mode ?? 'normal'} onChange={(e) => handleSettingChange({ mode: e.target.value as 'normal' | 'mission' })} className="w-full px-3 py-2 border rounded-lg">
-                  <option value="normal">일반</option>
-                  <option value="mission">미션</option>
-                </select>
+                <div className="flex gap-3 mb-2">
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="mode"
+                      value="normal"
+                      checked={(localSetting?.mode ?? 'normal') === 'normal'}
+                      onChange={() => handleSettingChange({ mode: 'normal' })}
+                    />
+                    <span className="text-sm text-gray-700">일반</span>
+                  </label>
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="mode"
+                      value="mission"
+                      checked={(localSetting?.mode ?? 'normal') === 'mission'}
+                      onChange={() => handleSettingChange({ mode: 'mission' })}
+                    />
+                    <span className="text-sm text-gray-700">미션</span>
+                  </label>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-700 mb-2">힌트 모드</label>
+                  <div className="flex gap-3">
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="hintMode"
+                        value="special"
+                        checked={(localSetting?.hintMode ?? 'special') === 'special'}
+                        onChange={() => handleSettingChange({ hintMode: 'special' })}
+                      />
+                      <span className="text-sm text-gray-700">특수 힌트</span>
+                    </label>
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="hintMode"
+                        value="auto"
+                        checked={(localSetting?.hintMode ?? 'special') === 'auto'}
+                        onChange={() => handleSettingChange({ hintMode: 'auto' })}
+                      />
+                      <span className="text-sm text-gray-700">자동 힌트</span>
+                    </label>
+                  </div>
+                </div>
               </div>
 
               <div>
