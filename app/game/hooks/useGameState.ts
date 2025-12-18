@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import gameManager from '../lib/gameManager';
+import gameManager from '../lib/GameManager';
 
 interface GameState {
   isPlaying: boolean;

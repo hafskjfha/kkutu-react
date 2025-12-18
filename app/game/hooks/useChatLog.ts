@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useChat, ChatMessage } from './useChat';
 import { useGameState } from './useGameState';
-import gameManager from '../lib/gameManager';
+import gameManager from '../lib/GameManager';
 
 /**
  * 채팅 메시지 목록 및 전송 로직을 관리하는 커스텀 훅

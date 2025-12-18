@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useState } from 'react';
-import { soundManager } from '../lib/sound';
+import { soundManager } from '../lib/SoundManager';
 
 interface Props {
   onClose: () => void;

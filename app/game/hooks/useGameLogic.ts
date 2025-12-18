@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useChat } from './useChat';
-import { soundManager, stopAllSounds } from '../lib/sound';
+import { soundManager, stopAllSounds } from '../lib/SoundManager';
 import { BEAT } from '../const';
-import gameManager from '../lib/gameManager';
+import gameManager from '../lib/GameManager';
 import { useGameState } from './useGameState';
 
 // defaults; will be updated from gameManager settings on init

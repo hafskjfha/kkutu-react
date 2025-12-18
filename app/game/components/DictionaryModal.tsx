@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from 'react';
-import gameManager from '../lib/gameManager';
+import gameManager from '../lib/GameManager';
 
 interface Props {
   onClose: () => void;

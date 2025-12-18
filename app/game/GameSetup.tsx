@@ -4,8 +4,8 @@ import { loadWordsFromFile, hasWords, getAllWords, clearAllWords } from './lib/w
 import WordManagerModal from './components/WordManagerModal';
 import ConfirmModal from './components/ConfirmModal';
 import StartCharModal from './components/StartCharModal';
-import gameManager from './lib/gameManager';
-import { stopAllSounds } from './lib/sound';
+import gameManager from './lib/GameManager';
+import { stopAllSounds } from './lib/SoundManager';
 
 /**
  * 게임 시작 전 준비 화면 컴포넌트

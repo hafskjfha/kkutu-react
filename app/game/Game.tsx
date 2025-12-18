@@ -6,7 +6,7 @@ import GameBox from "./GameBox";
 import GameHead from "./GameHead";
 import GameSetup from "./GameSetup";
 import { ChatProvider } from "./hooks/useChat";
-import { soundManager } from "./lib/sound";
+import { soundManager } from "./lib/SoundManager";
 import { useGameState } from "./hooks/useGameState";
 
 /**

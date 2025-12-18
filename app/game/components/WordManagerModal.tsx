@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getAllWords, searchWordsByPrefix, updateWord, deleteWord, addWord } from '../lib/wordDB';
-import gameManager from '../lib/gameManager';
+import gameManager from '../lib/GameManager';
 import ConfirmModal from './ConfirmModal';
 
 interface WordManagerModalProps {

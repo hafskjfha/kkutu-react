@@ -136,19 +136,24 @@ class SoundManager {
             // 무시
         }
     }
+
+    public stopAllSounds() {
+        try {
+            Object.values(this.sounds).forEach((s: Howl) => {
+                try { s.stop(); } catch (e) {}
+            });
+        } catch (e) {
+            // 무시
+        }
+    }
 }
 
 export const soundManager = new SoundManager();
 
 /**
  * 모든 사운드를 중지하는 헬퍼 함수
+ * @deprecated SoundManager.stopAllSounds()를 직접 사용하세요.
  */
 export const stopAllSounds = () => {
-    try {
-        Object.values(soundManager['sounds'] || {}).forEach((s: any) => {
-            try { s.stop(); } catch (e) {}
-        });
-    } catch (e) {
-        // 무시
-    }
+    soundManager.stopAllSounds();
 };
