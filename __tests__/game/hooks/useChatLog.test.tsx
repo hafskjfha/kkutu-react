@@ -31,7 +31,7 @@ describe('useChatLog', () => {
                 requestStart: mockRequestStart,
                 isPlaying: false,
             };
-            return selector(state);
+            return selector ? selector(state) : state;
         });
     });
 
@@ -92,7 +92,7 @@ describe('useChatLog', () => {
                 requestStart: mockRequestStart,
                 isPlaying: true,
             };
-            return selector(state);
+            return selector ? selector(state) : state;
         });
 
         const { result } = renderHook(() => useChatLog());

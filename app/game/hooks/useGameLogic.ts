@@ -14,6 +14,7 @@ let ROUND_TIME_LIMIT = 120; // seconds
  */
 export const useGameLogic = () => {
   const { chatInput, setChatInput, clearMessagesAndShowStartNotice } = useChat();
+  const { pendingStart, clearPendingStart, blockStart } = useGameState();
   const [word, setWord] = useState("/시작을 입력하면 게임시작!");
   const [isFail, setIsFail] = useState(false);
   const [isGameStarted, setIsGameStarted] = useState(false);
@@ -218,7 +219,7 @@ export const useGameLogic = () => {
           if (!gameManager.canGameStart()) {
             try { setChatInput(''); } catch (e) {}
             // set zustand store flag so UI can display modal
-            try { useGameState.setState({ startBlocked: true, startBlockedMessage: '게임을 시작할 수 없습니다.' }); } catch (e) {}
+            try { blockStart('게임을 시작할 수 없습니다.'); } catch (e) {}
             return;
           }
         } catch (e) {}
@@ -589,27 +590,10 @@ export const useGameLogic = () => {
     setTurnTime(TURN_TIME_LIMIT);
   }, []);
 
-  // If a start was requested from the setup/chat before navigating
-  // to the game screen, auto-trigger the start sequence once this
-  // logic hook is mounted and ready.
-  useEffect(() => {
-    const { pendingStart, clearPendingStart } = useGameState.getState();
-    if (pendingStart) {
-      // clear flag immediately so it doesn't re-trigger
-      clearPendingStart();
-      // call the same handler as typing '/시작'
-      handleInput('/시작');
-    }
-    // we intentionally run only once on mount
-  }, []);
-
   // Also react to pendingStart changes while this hook is mounted.
   // This allows chat commands that set `pendingStart` (e.g. /ㄱ, /r)
   // to trigger a restart even when the game UI is already mounted
   // or when a game has just ended.
-  const pendingStart = useGameState(state => state.pendingStart);
-  const clearPendingStart = useGameState(state => state.clearPendingStart);
-
   useEffect(() => {
     if (pendingStart) {
       clearPendingStart();

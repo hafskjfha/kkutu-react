@@ -3,16 +3,33 @@ import { Howl } from "howler";
 /**
  * 사운드 관리를 위한 클래스
  * Howler.js를 사용하여 오디오 리소스를 로드하고 재생합니다.
+ * Singleton 패턴을 사용하여 인스턴스를 관리합니다.
  */
 class SoundManager {
+    private static instance: SoundManager;
     private sounds: Record<string, Howl> = {};
     private lastPlayed: Record<string, number> = {};
+
+    private constructor() {
+        // Singleton
+    }
+
+    /**
+     * SoundManager의 인스턴스를 반환합니다.
+     */
+    public static getInstance(): SoundManager {
+        if (!SoundManager.instance) {
+            SoundManager.instance = new SoundManager();
+        }
+        return SoundManager.instance;
+    }
 
     /**
      * 모든 사운드 리소스를 로드합니다.
      * 게임 시작 시 호출되어야 합니다.
      */
-    public load(){
+    public load() {
+        // BGM 및 효과음 로드
         for (let i = 0; i <= 10; i++) {
             this.sounds[`T${i}`] = new Howl({
                 src: [`/audio/bgm/T${i}.mp3`],
@@ -27,36 +44,28 @@ class SoundManager {
                 volume: 1.0,
             });
         }
-        this.sounds["Al"] = new Howl({
-            src: ["/audio/in_game/Al.mp3"],
-            volume: 1.0,
+        
+        const commonSounds = [
+            { key: "Al", path: "/audio/in_game/Al.mp3" },
+            { key: "mission", path: "/audio/in_game/mission.mp3" },
+            { key: "fail", path: "/audio/in_game/fail.mp3" },
+            { key: "timeout", path: "/audio/in_game/timeout.mp3" },
+            { key: "game_start", path: "/audio/game/game_start.mp3" },
+            { key: "round_start", path: "/audio/game/round_start.mp3" },
+        ];
+
+        commonSounds.forEach(({ key, path }) => {
+            this.sounds[key] = new Howl({
+                src: [path],
+                volume: 1.0,
+            });
         });
-        this.sounds["mission"] = new Howl({
-            src: ["/audio/in_game/mission.mp3"],
-            volume: 1.0,
-        });
-        this.sounds["fail"] = new Howl({
-            src: ["/audio/in_game/fail.mp3"],
-            volume: 1.0,
-        });
-        this.sounds["timeout"] = new Howl({
-            src: ["/audio/in_game/timeout.mp3"],
-            volume: 1.0,
-        });
-        this.sounds["game_start"] = new Howl({
-            src: ["/audio/game/game_start.mp3"],
-            volume: 1.0,
-        });
-        this.sounds["round_start"] = new Howl({
-            src: ["/audio/game/round_start.mp3"],
-            volume: 1.0,
-        });
+
         this.sounds["jaqwiBGM"] = new Howl({
             src: ["/audio/bgm/jaqwiBGM.mp3"],
             volume: 1.0,
             loop: true,
         });
-        
     }
 
     /**
@@ -92,17 +101,13 @@ class SoundManager {
         this.stop(soundName);
         const s = this.sounds[soundName];
         if (!s) return;
-        try {
-            s.once('end', () => {
-                try {
-                    cb && cb();
-                } catch (e) {
-                    // 콜백 에러 무시
-                }
-            });
-        } catch (e) {
-            // 일부 환경에서 once 미지원 시 무시
-        }
+        
+        // 기존 이벤트 리스너 제거 (중복 실행 방지)
+        s.off('end');
+        
+        s.once('end', () => {
+            if (cb) cb();
+        });
         s.play();
     }
 
@@ -128,31 +133,25 @@ class SoundManager {
      * @param volume 0.0 ~ 1.0
      */
     public setAllVolume(volume: number) {
-        try {
-            Object.values(this.sounds).forEach((s: any) => {
-                try { s.volume(volume); } catch (e) {}
-            });
-        } catch (e) {
-            // 무시
-        }
+        Object.values(this.sounds).forEach((s) => {
+            s.volume(volume);
+        });
     }
 
+    /**
+     * 모든 사운드를 중지합니다.
+     */
     public stopAllSounds() {
-        try {
-            Object.values(this.sounds).forEach((s: Howl) => {
-                try { s.stop(); } catch (e) {}
-            });
-        } catch (e) {
-            // 무시
-        }
+        Object.values(this.sounds).forEach((s) => {
+            s.stop();
+        });
     }
 }
 
-export const soundManager = new SoundManager();
+export const soundManager = SoundManager.getInstance();
 
 /**
- * 모든 사운드를 중지하는 헬퍼 함수
- * @deprecated SoundManager.stopAllSounds()를 직접 사용하세요.
+ * @deprecated SoundManager.getInstance().stopAllSounds()를 사용하세요.
  */
 export const stopAllSounds = () => {
     soundManager.stopAllSounds();

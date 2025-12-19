@@ -1,5 +1,8 @@
+import { renderHook, act } from '@testing-library/react';
 import { useGameState } from '@/app/game/hooks/useGameState';
 import gameManager from '@/app/game/lib/GameManager';
+import * as hooks from '@/app/game/store/hooks';
+import { setPlaying, setPendingStart, setStartBlocked, resetGame } from '@/app/game/store/gameSlice';
 
 jest.mock('@/app/game/lib/GameManager', () => ({
     __esModule: true,
@@ -8,67 +11,99 @@ jest.mock('@/app/game/lib/GameManager', () => ({
     },
 }));
 
+jest.mock('@/app/game/store/hooks');
+
 describe('useGameState', () => {
+    const mockDispatch = jest.fn();
+    const mockSelector = jest.fn();
+
     beforeEach(() => {
-        useGameState.setState({
-            isPlaying: false,
-            pendingStart: false,
-            startBlocked: false,
-            startBlockedMessage: null,
-        });
         jest.clearAllMocks();
+        (hooks.useAppDispatch as jest.Mock).mockReturnValue(mockDispatch);
+        (hooks.useAppSelector as jest.Mock).mockImplementation((selector) => mockSelector(selector));
+        
+        // Default selector behavior
+        mockSelector.mockImplementation((selector) => selector({
+            game: {
+                isPlaying: false,
+                pendingStart: false,
+                startBlocked: false,
+                startBlockedMessage: null,
+            }
+        }));
     });
 
-    it('should have initial state', () => {
-        const state = useGameState.getState();
-        expect(state.isPlaying).toBe(false);
-        expect(state.pendingStart).toBe(false);
-        expect(state.startBlocked).toBe(false);
-        expect(state.startBlockedMessage).toBeNull();
+    it('should return current state', () => {
+        const { result } = renderHook(() => useGameState());
+        
+        expect(result.current.isPlaying).toBe(false);
+        expect(result.current.pendingStart).toBe(false);
+        expect(result.current.startBlocked).toBe(false);
+        expect(result.current.startBlockedMessage).toBeNull();
     });
 
     it('should request start successfully', () => {
         (gameManager.canGameStart as jest.Mock).mockReturnValue(true);
         
-        useGameState.getState().requestStart();
+        const { result } = renderHook(() => useGameState());
         
-        const state = useGameState.getState();
-        expect(state.isPlaying).toBe(true);
-        expect(state.pendingStart).toBe(true);
-        expect(state.startBlocked).toBe(false);
+        act(() => {
+            result.current.requestStart();
+        });
+        
+        expect(mockDispatch).toHaveBeenCalledWith(setPlaying(true));
+        expect(mockDispatch).toHaveBeenCalledWith(setPendingStart(true));
     });
 
     it('should block start if gameManager says no', () => {
         (gameManager.canGameStart as jest.Mock).mockReturnValue(false);
         
-        useGameState.getState().requestStart();
+        const { result } = renderHook(() => useGameState());
         
-        const state = useGameState.getState();
-        expect(state.isPlaying).toBe(false);
-        expect(state.pendingStart).toBe(false);
-        expect(state.startBlocked).toBe(true);
-        expect(state.startBlockedMessage).toBe('게임을 시작할 수 없습니다.');
+        act(() => {
+            result.current.requestStart();
+        });
+        
+        expect(mockDispatch).toHaveBeenCalledWith(setStartBlocked({ blocked: true, message: '게임을 시작할 수 없습니다.' }));
     });
 
     it('should clear pending start', () => {
-        useGameState.setState({ pendingStart: true });
-        useGameState.getState().clearPendingStart();
-        expect(useGameState.getState().pendingStart).toBe(false);
+        const { result } = renderHook(() => useGameState());
+        
+        act(() => {
+            result.current.clearPendingStart();
+        });
+        
+        expect(mockDispatch).toHaveBeenCalledWith(setPendingStart(false));
     });
 
     it('should exit game', () => {
-        useGameState.setState({ isPlaying: true, pendingStart: true });
-        useGameState.getState().exitGame();
-        const state = useGameState.getState();
-        expect(state.isPlaying).toBe(false);
-        expect(state.pendingStart).toBe(false);
+        const { result } = renderHook(() => useGameState());
+        
+        act(() => {
+            result.current.exitGame();
+        });
+        
+        expect(mockDispatch).toHaveBeenCalledWith(resetGame());
     });
 
     it('should dismiss start blocked', () => {
-        useGameState.setState({ startBlocked: true, startBlockedMessage: 'Error' });
-        useGameState.getState().dismissStartBlocked();
-        const state = useGameState.getState();
-        expect(state.startBlocked).toBe(false);
-        expect(state.startBlockedMessage).toBeNull();
+        const { result } = renderHook(() => useGameState());
+        
+        act(() => {
+            result.current.dismissStartBlocked();
+        });
+        
+        expect(mockDispatch).toHaveBeenCalledWith(setStartBlocked({ blocked: false, message: null }));
+    });
+
+    it('should block start with message', () => {
+        const { result } = renderHook(() => useGameState());
+        
+        act(() => {
+            result.current.blockStart('Custom message');
+        });
+        
+        expect(mockDispatch).toHaveBeenCalledWith(setStartBlocked({ blocked: true, message: 'Custom message' }));
     });
 });

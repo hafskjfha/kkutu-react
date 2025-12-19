@@ -8,8 +8,7 @@ import gameManager from '../lib/GameManager';
  */
 export const useChatLog = () => {
   const { messages, setMessages, chatInput, setChatInput, callGameInput, registerSendHint, chatRef } = useChat();
-  const requestStart = useGameState(state => state.requestStart);
-  const isPlaying = useGameState(state => state.isPlaying);
+  const { requestStart, isPlaying } = useGameState();
 
   const handleSendMessage = () => {
     if (chatInput.trim()) {

@@ -28,6 +28,7 @@ describe('useGameLogic', () => {
             const state = {
                 pendingStart: false,
                 clearPendingStart: jest.fn(),
+                blockStart: jest.fn(),
             };
             return selector ? selector(state) : state;
         });

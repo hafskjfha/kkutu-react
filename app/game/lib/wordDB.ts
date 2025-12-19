@@ -1,4 +1,5 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { parseWordsFromFile } from './fileUtils';
 
 interface WordDBSchema extends DBSchema {
   words: {
@@ -18,6 +19,7 @@ let dbInstance: IDBPDatabase<WordDBSchema> | null = null;
 
 /**
  * IndexedDB 데이터베이스를 초기화합니다.
+ * Singleton 패턴과 유사하게 인스턴스를 재사용합니다.
  */
 async function initDB(): Promise<IDBPDatabase<WordDBSchema>> {
   if (dbInstance) return dbInstance;
@@ -39,27 +41,16 @@ async function initDB(): Promise<IDBPDatabase<WordDBSchema>> {
  * @returns 저장된 단어 개수
  */
 export async function loadWordsFromFile(file: File): Promise<number> {
-  if (file.size > 1024 * 1024) {
-    throw new Error('파일 크기는 1MB를 초과할 수 없습니다.');
-  }
-
-  if (!file.name.endsWith('.txt')) {
-    throw new Error('txt 파일만 업로드 가능합니다.');
-  }
-  const pattern = /[^a-zA-Z0-9가-힣ㄱ-ㅎ]/g;
-  const text = await file.text();
-  const lines = text.split('\n').map(line => line.replace(pattern, '').toLowerCase()).filter(line => line.length > 1);
+  const words = await parseWordsFromFile(file);
 
   const db = await initDB();
   const tx = db.transaction(STORE_NAME, 'readwrite');
   const store = tx.objectStore(STORE_NAME);
 
   let count = 0;
-  for (const word of lines) {
-    if (word) {
-      await store.put({ word, theme: '자유' });
-      count++;
-    }
+  for (const word of words) {
+    await store.put({ word, theme: '자유' });
+    count++;
   }
 
   await tx.done;
