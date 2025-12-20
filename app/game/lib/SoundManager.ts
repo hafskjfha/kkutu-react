@@ -149,10 +149,3 @@ class SoundManager {
 }
 
 export const soundManager = SoundManager.getInstance();
-
-/**
- * @deprecated SoundManager.getInstance().stopAllSounds()를 사용하세요.
- */
-export const stopAllSounds = () => {
-    soundManager.stopAllSounds();
-};

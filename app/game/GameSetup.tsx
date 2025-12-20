@@ -5,7 +5,7 @@ import WordManagerModal from './components/WordManagerModal';
 import ConfirmModal from './components/ConfirmModal';
 import StartCharModal from './components/StartCharModal';
 import gameManager from './lib/GameManager';
-import { stopAllSounds } from './lib/SoundManager';
+import { soundManager } from './lib/SoundManager';
 
 /**
  * 게임 시작 전 준비 화면 컴포넌트
@@ -33,7 +33,7 @@ const GameSetup: React.FC = () => {
   useEffect(() => {
     checkExistingWords();
     loadLocalSetting();
-    stopAllSounds();
+    soundManager.stopAllSounds();
   }, []);
 
   const loadLocalSetting = () => {

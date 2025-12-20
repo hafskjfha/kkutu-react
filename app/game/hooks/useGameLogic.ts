@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useChat } from './useChat';
-import { soundManager, stopAllSounds } from '../lib/SoundManager';
+import { soundManager } from '../lib/SoundManager';
 import { BEAT } from '../const';
 import gameManager from '../lib/GameManager';
 import { useGameState } from './useGameState';
@@ -78,7 +78,7 @@ export const useGameLogic = () => {
    * 게임 종료 처리
    */
   const endGame = () => {
-    try { stopAllSounds(); } catch (e) {}
+    try { soundManager.stopAllSounds(); } catch (e) {}
     try { soundManager.play('timeout'); } catch (e) {}
     
     if (timerRef.current) {
